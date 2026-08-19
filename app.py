@@ -437,3 +437,76 @@ with tab_predictor:
 
         else:
             st.error(f"Faltan columnas requeridas en el dataset para el modelo ML. Se requieren: {features}")
+
+# =============================================================================
+# PESTAÑA 4: XGBOOST & EXPLICABILIDAD (XAI)
+# =============================================================================
+with tab_xgboost:
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ Carga y limpia el dataset en la Pestaña 1 primero.")
+    else:
+        st.header("⚡ Algoritmo Gradient Boosting (XGBoost) & Auditable AI")
+        st.markdown("XGBoost evalúa la decisión bajo optimización de gradiente y explica **por qué razón técnica** el cliente fue aprobado o rechazado.")
+
+        df_xgb = st.session_state.df_clean.copy()
+        features = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate']
+
+        if all(c in df_xgb.columns for c in features):
+            X_xgb = df_xgb[features].fillna(df_xgb[features].median())
+            y_xgb = df_xgb['loan_status']
+
+            # Entrenar modelo XGBoost
+            model_xgb = xgb.XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1, random_state=42)
+            model_xgb.fit(X_xgb, y_xgb)
+
+            # Importancia de variables global
+            importancia = pd.DataFrame({
+                'Variable': features,
+                'Importancia (%)': (model_xgb.feature_importances_ * 100).round(2)
+            }).sort_values(by='Importancia (%)', ascending=False)
+
+            col_x1, col_x2 = st.columns([1, 2])
+
+            with col_x1:
+                st.subheader("📌 Importancia Global de Variables")
+                st.dataframe(importancia, use_container_width=True)
+
+            with col_x2:
+                st.subheader("📊 Gráfico de Relevancia (XGBoost)")
+                fig_imp = px.bar(importancia, x='Importancia (%)', y='Variable', orientation='h', color='Importancia (%)', color_continuous_scale='Viridis')
+                st.plotly_chart(fig_imp, use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("🔎 Explicabilidad Individual para la Solicitud")
+
+            c1, c2, c3, c4 = st.columns(4)
+            val_age = c1.number_input("Edad (Años)", 18, 90, 28, key="xgb_age")
+            val_inc = c2.number_input("Ingreso Anual ($)", 1000, 500000, 35000, key="xgb_inc")
+            val_amt = c3.number_input("Monto Préstamo ($)", 500, 100000, 15000, key="xgb_amt")
+            val_rate = c4.number_input("Tasa Interés (%)", 1.0, 35.0, 14.5, key="xgb_rate")
+
+            if st.button("🧪 Auditar Decisión con XGBoost"):
+                vec_in = np.array([[val_age, val_inc, val_amt, val_rate]])
+                prob_xgb = model_xgb.predict_proba(vec_in)[0][1] * 100
+
+                st.markdown("#### Resultado del Dictamen XGBoost:")
+                if prob_xgb < 30:
+                    st.success(f"✅ **Aprobado por XGBoost** | Probabilidad de Default: **{prob_xgb:.2f}%**")
+                else:
+                    st.error(f"❌ **Rechazado por XGBoost** | Probabilidad de Default: **{prob_xgb:.2f}%**")
+
+                # Cálculo de contribución individual aproximada (Descomposición de características)
+                medias = X_xgb.mean()
+                desviaciones = X_xgb.std()
+                desviacion_cliente = (vec_in[0] - medias) / desviaciones
+                
+                df_razones = pd.DataFrame({
+                    'Variable': ['Edad', 'Ingreso Anual', 'Monto Solicitado', 'Tasa de Interés'],
+                    'Valor Cliente': [val_age, val_inc, val_amt, val_rate],
+                    'Promedio Dataset': medias.values.round(2),
+                    'Impacto en la Decisión': ['Reduce Riesgo 🟢' if d < 0 else 'Aumenta Riesgo 🔴' for d in desviacion_cliente]
+                })
+                
+                st.write("**Desglose Técnico de Factores de Riesgo:**")
+                st.table(df_razones)
+
