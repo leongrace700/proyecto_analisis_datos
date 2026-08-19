@@ -30,10 +30,11 @@ if "df_clean" not in st.session_state:
 # -----------------------------------------------------------------------------
 # ESTRUCTURA DE PESTAÑAS (TABS)
 # -----------------------------------------------------------------------------
-tab_eda, tab_dashboard, tab_predictor = st.tabs([
+tab_eda, tab_dashboard, tab_predictor, tab_xgboost = st.tabs([
     "📁 1. Carga & Limpieza de Datos (EDA)", 
     "📊 2. Dashboard de Negocio", 
-    "🤖 3. Simulador Predictivo (ML)"
+    "🤖 3. Simulador Predictivo (ML)",
+    "⚡ 4. XGBoost & Explicabilidad (XAI)"
 ])
 
    
