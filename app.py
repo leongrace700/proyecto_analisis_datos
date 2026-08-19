@@ -4,11 +4,6 @@ import numpy as np
 import plotly.express as px
 import xgboost as xgb
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
@@ -39,8 +34,7 @@ tab_eda, tab_dashboard, tab_predictor, tab_xgboost, tab_dl = st.tabs([
     "📁 1. Carga & Limpieza de Datos (EDA)", 
     "📊 2. Dashboard de Negocio", 
     "🤖 3. Simulador Predictivo (ML)",
-    "⚡ 4. XGBoost & Explicabilidad (XAI)",
-    "🧠 5. Deep Learning & Perfilamiento"
+    "⚡ 4. XGBoost & Explicabilidad (XAI)"
 ])
 
    
@@ -597,4 +591,3 @@ with tab_dl:
                 m3.metric("Pérdida Esperada (EL)", f"${expected_loss:,.2f}")
 
                 st.caption(f"ℹ️ **Pérdida Esperada (Expected Loss):** Provisiones recomendadas en balance por **${expected_loss:,.2f}** bajo norma Basilea III (LGD estimada del 45%).")
-
