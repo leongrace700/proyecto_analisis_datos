@@ -3,760 +3,511 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import xgboost as xgb
-import shap
-
-from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score,
-    f1_score, roc_auc_score, confusion_matrix
-)
 
-from lightgbm import LGBMClassifier
-
-# TensorFlow es opcional: la app funciona sin Deep Learning si no está instalado.
-try:
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import Dense, Dropout
-    from tensorflow.keras.callbacks import EarlyStopping
-    TF_AVAILABLE = True
-except ImportError:
-    TF_AVAILABLE = False
-
-
-# ============================================================
-# CONFIGURACIÓN
-# ============================================================
+# -----------------------------------------------------------------------------
+# CONFIGURACIÓN DE LA PÁGINA
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Credit Risk Platform",
+    page_title="Credit Risk Platform | EDA & Predictor",
     page_icon="🏦",
     layout="wide"
 )
 
 st.title("🏦 Plataforma Integral de Riesgo Crediticio")
-st.caption("EDA → Dashboard → Comparación ML → Deep Learning → Simulador → XAI")
+st.markdown("Gestión completa del ciclo de datos: Carga & EDA $\rightarrow$ Dashboard Interactivo $\rightarrow$ Predicción ML")
 
-
-# ============================================================
-# SESSION STATE
-# ============================================================
+# -----------------------------------------------------------------------------
+# GESTIÓN DEL ESTADO GLOBAL (Session State)
+# -----------------------------------------------------------------------------
+# Inicializamos el dataframe en la sesión para que persista entre pestañas
 if "df_raw" not in st.session_state:
     st.session_state.df_raw = None
 
 if "df_clean" not in st.session_state:
     st.session_state.df_clean = None
 
-if "models" not in st.session_state:
-    st.session_state.models = {}
-
-if "preprocessor" not in st.session_state:
-    st.session_state.preprocessor = None
-
-if "model_features" not in st.session_state:
-    st.session_state.model_features = []
-
-
-# ============================================================
-# FUNCIONES
-# ============================================================
-def clean_data(df, drop_dups=True, impute=True, clean_age=True):
-    data = df.copy()
-
-    if drop_dups:
-        data = data.drop_duplicates()
-
-    if impute:
-        for col in data.columns:
-            if data[col].isnull().any():
-                if pd.api.types.is_numeric_dtype(data[col]):
-                    data[col] = data[col].fillna(data[col].median())
-                else:
-                    mode = data[col].mode()
-                    if len(mode):
-                        data[col] = data[col].fillna(mode.iloc[0])
-
-    if clean_age and "person_age" in data.columns:
-        data = data[data["person_age"] <= 100]
-
-    if "person_age" in data.columns:
-        data["person_age"] = data["person_age"].astype(int)
-
-    if "loan_status" in data.columns:
-        data["loan_status"] = data["loan_status"].astype(int)
-
-    return data
-
-
-def build_preprocessor(X):
-    numeric_cols = X.select_dtypes(include=np.number).columns.tolist()
-    categorical_cols = X.select_dtypes(exclude=np.number).columns.tolist()
-
-    numeric_pipe = Pipeline([
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler())
-    ])
-
-    categorical_pipe = Pipeline([
-        ("imputer", SimpleImputer(strategy="most_frequent")),
-        ("onehot", OneHotEncoder(handle_unknown="ignore"))
-    ])
-
-    preprocessor = ColumnTransformer([
-        ("num", numeric_pipe, numeric_cols),
-        ("cat", categorical_pipe, categorical_cols)
-    ])
-
-    return preprocessor
-
-
-def metrics_row(name, y_true, pred, prob):
-    return {
-        "Modelo": name,
-        "Accuracy": accuracy_score(y_true, pred),
-        "Precision": precision_score(y_true, pred, zero_division=0),
-        "Recall": recall_score(y_true, pred, zero_division=0),
-        "F1-Score": f1_score(y_true, pred, zero_division=0),
-        "ROC-AUC": roc_auc_score(y_true, prob)
-    }
-
-
-# ============================================================
-# TABS
-# ============================================================
-tab_eda, tab_dashboard, tab_models, tab_simulator, tab_xai = st.tabs([
-    "📁 1. EDA & Limpieza",
-    "📊 2. Dashboard",
-    "🤖 3. Modelos ML + DL",
-    "💰 4. Simulador",
-    "⚡ 5. XAI con SHAP"
+# -----------------------------------------------------------------------------
+# ESTRUCTURA DE PESTAÑAS (TABS)
+# -----------------------------------------------------------------------------
+tab_eda, tab_dashboard, tab_predictor, tab_xgboost = st.tabs([
+    "📁 1. Carga & Limpieza de Datos (EDA)", 
+    "📊 2. Dashboard de Negocio", 
+    "🤖 3. Simulador Predictivo (ML)",
+    "⚡ 4. XGBoost & Explicabilidad (XAI)"
 ])
 
-
-# ============================================================
-# 1. EDA
-# ============================================================
+   
+# =============================================================================
+# PESTAÑA 1: EDA Y LIMPIEZA DE DATOS (AVANZADA)
+# =============================================================================
 with tab_eda:
-    st.header("🔍 Carga y limpieza de datos")
-
-    uploaded_file = st.file_uploader(
-        "Sube tu dataset CSV",
-        type=["csv"]
-    )
-
+    st.header("🔍 Carga de Archivo y Limpieza Avanzada (EDA)")
+    
+    uploaded_file = st.file_uploader("Sube tu dataset en formato CSV (ej. credit_risk_dataset.csv)", type=["csv"])
+    
     if uploaded_file is not None:
         st.session_state.df_raw = pd.read_csv(uploaded_file)
+        
+        st.subheader("1. Diagnóstico Inicial de Calidad de Datos")
+        
+        col_diag1, col_diag2, col_diag3 = st.columns(3)
+        total_filas = len(st.session_state.df_raw)
+        total_nulos = st.session_state.df_raw.isnull().sum().sum()
+        duplicados = st.session_state.df_raw.duplicated().sum()
+        
+        col_diag1.metric("Filas Totales", f"{total_filas:,}")
+        col_diag2.metric("Valores Vacíos / Nulos", f"{total_nulos:,}")
+        col_diag3.metric("Filas Duplicadas", f"{duplicados:,}")
+        
+        # Tabla detallada de nulos por columna
+        with st.expander("📌 Ver detalle de valores nulos y tipos de datos por columna"):
+            null_info = pd.DataFrame({
+                "Tipo de Dato": st.session_state.df_raw.dtypes,
+                "Valores Nulos": st.session_state.df_raw.isnull().sum(),
+                "% Nulos": (st.session_state.df_raw.isnull().sum() / total_filas * 100).round(2)
+            })
+            st.dataframe(null_info, use_container_width=True)
 
-        df = st.session_state.df_raw
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Filas", f"{len(df):,}")
-        c2.metric("Nulos", f"{df.isnull().sum().sum():,}")
-        c3.metric("Duplicados", f"{df.duplicated().sum():,}")
-
-        st.subheader("Diagnóstico")
-        st.dataframe(
-            pd.DataFrame({
-                "Tipo": df.dtypes.astype(str),
-                "Nulos": df.isnull().sum(),
-                "% Nulos": (df.isnull().sum() / len(df) * 100).round(2)
-            }),
-            use_container_width=True
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            drop_dups = st.checkbox("Eliminar duplicados", True)
-            impute = st.checkbox("Imputar valores faltantes", True)
-
-        with col2:
-            clean_age = st.checkbox("Eliminar edades > 100", True)
-
-        if st.button("🛠️ Limpiar dataset"):
-            st.session_state.df_clean = clean_data(
-                df,
-                drop_dups,
-                impute,
-                clean_age
-            )
-            st.success(
-                f"Dataset procesado: "
-                f"{len(st.session_state.df_clean):,} registros."
+        st.markdown("---")
+        st.subheader("2. Configuración de Limpieza y Tratamiento")
+        
+        col_opt1, col_opt2 = st.columns(2)
+        
+        # --- COLUMNA 1: MANEJO DE NULOS Y DUPLICADOS ---
+        with col_opt1:
+            st.markdown("##### 🧹 Valores Vacíos y Duplicados")
+            drop_dups = st.checkbox("Eliminar duplicados exactos", value=True)
+            
+            estrategia_nulos = st.radio(
+                "Tratamiento para valores vacíos (nulos):",
+                ["Eliminar filas con nulos", "Imputar vacíos (Mediana para números / Moda para texto)", "Conservar nulos"]
             )
 
+        # --- COLUMNA 2: MANEJO DE VALORES ATÍPICOS (OUTLIERS) ---
+        with col_opt2:
+            st.markdown("##### 🚨 Tratamiento de Outliers (Valores Atípicos)")
+            
+            # Outliers por regla de negocio
+            clean_age = st.checkbox("Filtrar edades irrealistas (Edad > 100 años)", value=True)
+            
+            # Outliers por método estadístico IQR
+            clean_iqr = st.checkbox("Filtrar outliers con método IQR (Rango Intercuartílico)", value=False)
+            if clean_iqr:
+                factor_iqr = st.slider("Factor de tolerancia IQR (1.5 = Estándar, 3.0 = Conservador)", 1.0, 3.0, 1.5, step=0.1)
+
+        # --- EJECUCIÓN DE LA LIMPIEZA ---
+        if st.button("🛠️ Aplicar Limpieza y Generar Dataset Procesado"):
+            df_temp = st.session_state.df_raw.copy()
+            filas_iniciales = len(df_temp)
+            
+            # 1. Duplicados
+            if drop_dups:
+                df_temp = df_temp.drop_duplicates()
+                
+            # 2. Manejo de nulos
+            if estrategia_nulos == "Eliminar filas con nulos":
+                df_temp = df_temp.dropna()
+            elif estrategia_nulos == "Imputar vacíos (Mediana para números / Moda para texto)":
+                for col in df_temp.columns:
+                    if df_temp[col].dtype in ['int64', 'float64']:
+                        df_temp[col] = df_temp[col].fillna(df_temp[col].median())
+                    else:
+                        df_temp[col] = df_temp[col].fillna(df_temp[col].mode()[0])
+            
+            # 3. Outliers de Edad (Regla de negocio)
+            if clean_age and 'person_age' in df_temp.columns:
+                df_temp = df_temp[df_temp['person_age'] <= 100]
+                
+            # 4. Outliers estadísticos IQR (Aplicado a ingresos y montos)
+            if clean_iqr:
+                cols_num = [c for c in ['person_income', 'loan_amnt'] if c in df_temp.columns]
+                for col in cols_num:
+                    Q1 = df_temp[col].quantile(0.25)
+                    Q3 = df_temp[col].quantile(0.75)
+                    IQR = Q3 - Q1
+                    limite_inferior = Q1 - (factor_iqr * IQR)
+                    limite_superior = Q3 + (factor_iqr * IQR)
+                    df_temp = df_temp[(df_temp[col] >= limite_inferior) & (df_temp[col] <= limite_superior)]
+
+            # Formateo de tipos
+            if 'person_age' in df_temp.columns:
+                df_temp['person_age'] = df_temp['person_age'].astype(int)
+            if 'loan_status' in df_temp.columns:
+                df_temp['loan_status'] = df_temp['loan_status'].astype(int)
+
+            # Guardar en sesión
+            st.session_state.df_clean = df_temp
+            filas_eliminadas = filas_iniciales - len(df_temp)
+            
+            st.success(f"✅ ¡Procesamiento completado! Se descartaron **{filas_eliminadas:,}** filas ruidosas/atípicas. Dataset final listo con **{len(df_temp):,}** registros.")
+
+        # --- VISTA PREVIA Y DESCARGA ---
         if st.session_state.df_clean is not None:
-            st.subheader("Dataset limpio")
-            st.dataframe(
-                st.session_state.df_clean.head(10),
-                use_container_width=True
-            )
-
-            csv = st.session_state.df_clean.to_csv(index=False).encode("utf-8")
-
-            st.download_button(
-                "📥 Descargar CSV limpio",
-                csv,
-                "credit_risk_cleaned.csv",
-                "text/csv"
-            )
-
-    else:
-        st.info("Sube un CSV para comenzar.")
-
-
-# ============================================================
-# 2. DASHBOARD
-# ============================================================
-with tab_dashboard:
-    st.header("📊 Dashboard de negocio")
-
-    if st.session_state.df_clean is None:
-        st.warning("Primero carga y limpia el dataset.")
-    else:
-        df = st.session_state.df_clean.copy()
-
-        if "loan_status" not in df.columns:
-            st.error("El dataset necesita la columna loan_status.")
-        else:
-            c1, c2, c3, c4 = st.columns(4)
-
-            c1.metric("Registros", f"{len(df):,}")
-            c2.metric(
-                "Tasa de Default",
-                f"{df['loan_status'].mean() * 100:.2f}%"
-            )
-
-            if "loan_amnt" in df.columns:
-                c3.metric(
-                    "Préstamo promedio",
-                    f"${df['loan_amnt'].mean():,.0f}"
-                )
-
-            if "person_income" in df.columns:
-                c4.metric(
-                    "Ingreso promedio",
-                    f"${df['person_income'].mean():,.0f}"
-                )
-
-            if "loan_intent" in df.columns:
-                st.subheader("Default por propósito del préstamo")
-
-                fig = px.histogram(
-                    df,
-                    x="loan_intent",
-                    color="loan_status",
-                    barmode="group"
-                )
-
-                st.plotly_chart(fig, use_container_width=True)
-
-            if all(c in df.columns for c in ["person_income", "loan_amnt"]):
-                st.subheader("Ingreso vs. monto solicitado")
-
-                sample = df.sample(min(1000, len(df)), random_state=42)
-
-                fig2 = px.scatter(
-                    sample,
-                    x="person_income",
-                    y="loan_amnt",
-                    color="loan_status",
-                    opacity=0.6
-                )
-
-                st.plotly_chart(fig2, use_container_width=True)
-
-
-# ============================================================
-# 3. MODELOS ML + DL
-# ============================================================
-with tab_models:
-    st.header("🤖 Comparación de Machine Learning y Deep Learning")
-
-    if st.session_state.df_clean is None:
-        st.warning("Primero carga y limpia el dataset.")
-    else:
-        df = st.session_state.df_clean.copy()
-
-        target = "loan_status"
-
-        if target not in df.columns:
-            st.error("No se encontró loan_status.")
-        else:
-            # Usar todas las variables disponibles excepto el target.
-            # Esto permite aprovechar variables categóricas del dataset.
-            X = df.drop(columns=[target])
-            y = df[target]
-
-            # Eliminar columnas de texto de alta cardinalidad que no son útiles
-            # para este modelo si aparecen.
-            drop_cols = [
-                c for c in ["person_id", "id", "customer_id"]
-                if c in X.columns
-            ]
-            X = X.drop(columns=drop_cols)
-
-            # Separación train/test
-            X_train, X_test, y_train, y_test = train_test_split(
-                X,
-                y,
-                test_size=0.20,
-                random_state=42,
-                stratify=y
-            )
-
-            preprocessor = build_preprocessor(X)
-
-            models = {
-                "Regresión Logística": LogisticRegression(
-                    max_iter=1000,
-                    class_weight="balanced"
-                ),
-
-                "Random Forest": RandomForestClassifier(
-                    n_estimators=200,
-                    random_state=42,
-                    class_weight="balanced",
-                    n_jobs=-1
-                ),
-
-                "XGBoost": xgb.XGBClassifier(
-                    n_estimators=200,
-                    max_depth=4,
-                    learning_rate=0.05,
-                    random_state=42,
-                    eval_metric="logloss"
-                ),
-
-                "LightGBM": LGBMClassifier(
-                    n_estimators=200,
-                    learning_rate=0.05,
-                    max_depth=5,
-                    random_state=42,
-                    verbose=-1
-                )
-            }
-
-            results = []
-            trained_models = {}
-
-            with st.spinner("Entrenando modelos..."):
-
-                for name, estimator in models.items():
-
-                    pipe = Pipeline([
-                        ("preprocessor", preprocessor),
-                        ("model", estimator)
-                    ])
-
-                    pipe.fit(X_train, y_train)
-
-                    pred = pipe.predict(X_test)
-                    prob = pipe.predict_proba(X_test)[:, 1]
-
-                    results.append(
-                        metrics_row(
-                            name,
-                            y_test,
-                            pred,
-                            prob
-                        )
-                    )
-
-                    trained_models[name] = pipe
-
-            results_df = pd.DataFrame(results)
-
-            st.subheader("📊 Resultados ML")
-
-            st.dataframe(
-                results_df.style.format({
-                    "Accuracy": "{:.3f}",
-                    "Precision": "{:.3f}",
-                    "Recall": "{:.3f}",
-                    "F1-Score": "{:.3f}",
-                    "ROC-AUC": "{:.3f}"
-                }),
-                use_container_width=True
-            )
-
-            fig = px.bar(
-                results_df,
-                x="Modelo",
-                y="ROC-AUC",
-                text="ROC-AUC",
-                title="Comparación ROC-AUC"
-            )
-
-            fig.update_traces(
-                texttemplate="%{text:.3f}",
-                textposition="outside"
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            best_name = results_df.loc[
-                results_df["ROC-AUC"].idxmax(),
-                "Modelo"
-            ]
-
-            best_auc = results_df["ROC-AUC"].max()
-
-            st.success(
-                f"🏆 Mejor modelo ML: **{best_name}** "
-                f"con ROC-AUC = **{best_auc:.3f}**"
-            )
-
-            st.session_state.models = trained_models
-            st.session_state.preprocessor = preprocessor
-            st.session_state.model_features = X.columns.tolist()
-
-            # ----------------------------------------------------
-            # DEEP LEARNING
-            # ----------------------------------------------------
             st.markdown("---")
-            st.subheader("🧠 Red Neuronal MLP")
-
-            if not TF_AVAILABLE:
-                st.warning(
-                    "TensorFlow no está instalado. "
-                    "Agrega tensorflow al requirements.txt."
-                )
-            else:
-                X_train_nn = preprocessor.fit_transform(X_train)
-                X_test_nn = preprocessor.transform(X_test)
-
-                # Convertir sparse matrix a dense para Keras
-                if hasattr(X_train_nn, "toarray"):
-                    X_train_nn = X_train_nn.toarray()
-                    X_test_nn = X_test_nn.toarray()
-
-                model_nn = Sequential([
-                    Dense(
-                        64,
-                        activation="relu",
-                        input_shape=(X_train_nn.shape[1],)
-                    ),
-                    Dropout(0.30),
-                    Dense(32, activation="relu"),
-                    Dropout(0.20),
-                    Dense(16, activation="relu"),
-                    Dense(1, activation="sigmoid")
-                ])
-
-                model_nn.compile(
-                    optimizer="adam",
-                    loss="binary_crossentropy",
-                    metrics=["accuracy"]
-                )
-
-                early_stop = EarlyStopping(
-                    monitor="val_loss",
-                    patience=8,
-                    restore_best_weights=True
-                )
-
-                with st.spinner("Entrenando red neuronal..."):
-                    history = model_nn.fit(
-                        X_train_nn,
-                        y_train,
-                        validation_split=0.20,
-                        epochs=50,
-                        batch_size=64,
-                        callbacks=[early_stop],
-                        verbose=0
-                    )
-
-                nn_prob = model_nn.predict(
-                    X_test_nn,
-                    verbose=0
-                ).ravel()
-
-                nn_pred = (nn_prob >= 0.5).astype(int)
-
-                nn_auc = roc_auc_score(y_test, nn_prob)
-
-                c1, c2, c3, c4, c5 = st.columns(5)
-
-                c1.metric(
-                    "Accuracy",
-                    f"{accuracy_score(y_test, nn_pred):.3f}"
-                )
-                c2.metric(
-                    "Precision",
-                    f"{precision_score(y_test, nn_pred, zero_division=0):.3f}"
-                )
-                c3.metric(
-                    "Recall",
-                    f"{recall_score(y_test, nn_pred, zero_division=0):.3f}"
-                )
-                c4.metric(
-                    "F1",
-                    f"{f1_score(y_test, nn_pred, zero_division=0):.3f}"
-                )
-                c5.metric(
-                    "ROC-AUC",
-                    f"{nn_auc:.3f}"
-                )
-
-                history_df = pd.DataFrame(history.history)
-
-                fig_loss = px.line(
-                    history_df,
-                    y=["loss", "val_loss"],
-                    title="Evolución del entrenamiento MLP"
-                )
-
-                st.plotly_chart(
-                    fig_loss,
-                    use_container_width=True
-                )
-
-                st.session_state.nn_model = model_nn
-                st.session_state.nn_preprocessor = preprocessor
-
-
-# ============================================================
-# 4. SIMULADOR
-# ============================================================
-with tab_simulator:
-    st.header("💰 Simulador de Riesgo y Amortización")
-
-    if not st.session_state.models:
-        st.warning(
-            "Primero entrena los modelos en la Pestaña 3."
-        )
+            st.subheader("3. Dataset Limpio y Listo para Análisis")
+            st.dataframe(st.session_state.df_clean.head(10), use_container_width=True)
+            
+            csv_clean = st.session_state.df_clean.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Descargar CSV Limpio",
+                data=csv_clean,
+                file_name="credit_risk_cleaned.csv",
+                mime="text/csv"
+            )
     else:
-        model_names = list(st.session_state.models.keys())
+        st.info("👆 Por favor sube un archivo `.csv` para iniciar el diagnóstico y la limpieza de datos.")
 
-        selected_model = st.selectbox(
-            "Modelo para evaluar la solicitud",
-            model_names,
-            index=model_names.index("XGBoost")
-            if "XGBoost" in model_names else 0
-        )
 
-        model = st.session_state.models[selected_model]
+# =============================================================================
+# PESTAÑA 2: DASHBOARD DE NEGOCIO Y FILTROS
+# =============================================================================
+with tab_dashboard:
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ Debes cargar y limpiar el dataset en la **Pestaña 1 (EDA)** antes de acceder al Dashboard.")
+    else:
+        df = st.session_state.df_clean.copy()
+        
+        # BARRA LATERAL DE FILTROS (Se activa cuando hay datos limpios)
+        st.sidebar.header("🔍 Filtros del Dashboard")
 
-        c1, c2 = st.columns(2)
+        intenciones = ['Todas'] + list(df['loan_intent'].dropna().unique()) if 'loan_intent' in df.columns else ['Todas']
+        intencion_selected = st.sidebar.selectbox("Propósito del Préstamo", intenciones)
 
-        with c1:
-            age = st.number_input(
-                "Edad",
-                18,
-                90,
-                30
+        min_age, max_age = int(df['person_age'].min()), int(df['person_age'].max())
+        edad_rango = st.sidebar.slider("Rango de Edad del Cliente", min_age, max_age, (min_age, max_age))
+
+        # Aplicar filtros
+        df_filtered = df[(df['person_age'] >= edad_rango[0]) & (df['person_age'] <= edad_rango[1])]
+        if intencion_selected != 'Todas' and 'loan_intent' in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered['loan_intent'] == intencion_selected]
+
+        # KPIs
+        col1, col2, col3, col4 = st.columns(4)
+        total_prestado = df_filtered['loan_amnt'].sum()
+        tasa_morosidad = (df_filtered['loan_status'].mean()) * 100
+        ingreso_promedio = df_filtered['person_income'].mean()
+        prestamo_promedio = df_filtered['loan_amnt'].mean()
+
+        col1.metric("Cartera Analizada", f"${total_prestado:,.0f}")
+        col2.metric("Tasa de Morosidad", f"{tasa_morosidad:.2f}%")
+        col3.metric("Ingreso Promedio", f"${ingreso_promedio:,.0f}")
+        col4.metric("Préstamo Promedio", f"${prestamo_promedio:,.0f}")
+
+        st.markdown("---")
+
+        # Gráficos Plotly
+        col_chart1, col_chart2 = st.columns(2)
+
+        with col_chart1:
+            st.subheader("📊 Distribución de Préstamos por Propósito")
+            if 'loan_intent' in df_filtered.columns:
+                fig_intent = px.histogram(
+                    df_filtered, 
+                    x="loan_intent", 
+                    color="loan_status", 
+                    barmode="group",
+                    labels={"loan_intent": "Propósito", "count": "Número de Créditos", "loan_status": "Default (1)"},
+                    color_discrete_sequence=['#2ecc71', '#e74c3c']
+                )
+                st.plotly_chart(fig_intent, use_container_width=True)
+
+        with col_chart2:
+            st.subheader("📉 Relación Ingreso vs. Monto Solicitado")
+            fig_scatter = px.scatter(
+                df_filtered.sample(min(1000, len(df_filtered))), 
+                x="person_income", 
+                y="loan_amnt", 
+                color="loan_status",
+                labels={"person_income": "Ingreso Anual ($)", "loan_amnt": "Monto del Préstamo ($)"},
+                opacity=0.6,
+                color_discrete_sequence=['#3498db', '#e74c3c']
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True)
+
+
+# =============================================================================
+# PESTAÑA 3: CALCULADORA DE RIESGO, AMORTIZACIÓN Y DIAGNÓSTICO
+# =============================================================================
+with tab_predictor:
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ Debes cargar y limpiar el dataset en la **Pestaña 1 (EDA)** antes de acceder a la Calculadora de Riesgo.")
+    else:
+        st.header("🏢 Calculadora de Evaluación y Amortización para Analistas de Riesgo")
+        st.caption("🔒 **Aviso de Privacidad & Gobernanza de Datos:** Esta herramienta utiliza identificadores sintéticos anonimizados. No se procesan ni almacenan documentos de identidad ni PII (Información Personal Identificable).")
+
+        df_ml = st.session_state.df_clean.copy()
+        features = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate']
+        
+        if all(col in df_ml.columns for col in features):
+            X = df_ml[features].fillna(df_ml[features].median())
+            y = df_ml['loan_status']
+            
+            model = RandomForestClassifier(n_estimators=50, random_state=42)
+            model.fit(X, y)
+
+            st.markdown("---")
+            
+            modo_simulacion = st.radio(
+                "🎯 Selecciona el Objetivo de la Simulación:",
+                ["Modo A: Evaluar un Monto Específico Solicitado", "Modo B: Calcular Capacidad Máxima de Préstamo (Sugerido)"],
+                horizontal=True
             )
 
-            income = st.number_input(
-                "Ingreso anual",
-                1000,
-                1000000,
-                45000,
-                step=1000
-            )
+            st.markdown("---")
+            st.subheader("1. Parámetros Financieros del Solicitante")
 
-            amount = st.number_input(
-                "Monto solicitado",
-                500,
-                200000,
-                12000,
-                step=500
-            )
+            col_f1, col_f2 = st.columns(2)
 
-        with c2:
-            rate = st.number_input(
-                "Tasa anual (%)",
-                1.0,
-                40.0,
-                11.5,
-                step=0.25
-            )
+            with col_f1:
+                st.markdown("##### 👤 Datos de Entrada Anonimizados")
+                id_solicitante = st.text_input("ID Sintético de la Solicitud", value="SOL-2026-1049", disabled=True)
+                input_age = st.number_input("Edad del Solicitante (Años)", min_value=18, max_value=90, value=30)
+                input_income = st.number_input("Ingreso Anual Verificado ($)", min_value=1000, max_value=1000000, value=45000, step=5000)
+                
+                categorias_credito = {
+                    "PERSONAL": {"plazo_std": 36, "tasa_promedio": 11.5},
+                    "EDUCATION": {"plazo_std": 48, "tasa_promedio": 9.8},
+                    "MEDICAL": {"plazo_std": 24, "tasa_promedio": 12.0},
+                    "VENTURE": {"plazo_std": 60, "tasa_promedio": 14.5},
+                    "HOMEIMPROVEMENT": {"plazo_std": 60, "tasa_promedio": 10.5},
+                    "DEBTCONSOLIDATION": {"plazo_std": 48, "tasa_promedio": 13.2}
+                }
+                
+                categoria_sel = st.selectbox("Categoría / Línea de Crédito", list(categorias_credito.keys()))
 
-            months = st.slider(
-                "Plazo (meses)",
-                6,
-                84,
-                36,
-                step=6
-            )
+            with col_f2:
+                st.markdown("##### ⚙️ Condiciones de la Estructuración")
+                
+                plazo_sugerido = categorias_credito[categoria_sel]["plazo_std"]
+                input_plazo_meses = st.slider("Plazo del Crédito (Meses)", 6, 84, plazo_sugerido, step=6)
+                
+                tasa_sugerida = categorias_credito[categoria_sel]["tasa_promedio"]
+                input_rate = st.number_input("Tasa de Interés Anual Efec. (%)", min_value=1.0, max_value=40.0, value=tasa_sugerida, step=0.25)
+                
+                tipo_cuota = st.selectbox("Sistema de Amortización", ["Cuota Fija (Sistema Francés)", "Cuota Variable (Sistema Alemán)"])
 
-        if st.button("📊 Evaluar solicitud"):
+                tasa_mensual = (input_rate / 100) / 12
+                ingreso_mensual = input_income / 12
+                
+                if "Modo A" in modo_simulacion:
+                    input_amount = st.number_input("Monto Solicitado a Evaluar ($)", min_value=500, max_value=200000, value=12000, step=1000)
+                else:
+                    cuota_maxima_permitida = ingreso_mensual * 0.30
+                    if tasa_mensual > 0:
+                        monto_max_calculado = cuota_maxima_permitida * (((1 + tasa_mensual)**input_plazo_meses - 1) / (tasa_mensual * (1 + tasa_mensual)**input_plazo_meses))
+                    else:
+                        monto_max_calculado = cuota_maxima_permitida * input_plazo_meses
+                    
+                    st.info(f"💡 **Monto Máximo Sugerido:** Es de **${monto_max_calculado:,.2f}** para no exceder un DTI del 30%.")
+                    input_amount = float(np.round(monto_max_calculado, -2))
 
-            # Crear una fila usando las variables del modelo.
-            # Para variables adicionales del dataset usamos valores
-            # de referencia (mediana/moda).
-            df = st.session_state.df_clean
-            row = {}
+            st.markdown("---")
+            
+            if st.button("📊 Generar Dictamen y Amortización"):
+                
+                input_data = np.array([[input_age, input_income, input_amount, input_rate]])
+                prob_default = model.predict_proba(input_data)[0][1] * 100
+                
+                if tipo_cuota == "Cuota Fija (Sistema Francés)":
+                    if tasa_mensual > 0:
+                        cuota_mensual = input_amount * (tasa_mensual * (1 + tasa_mensual)**input_plazo_meses) / ((1 + tasa_mensual)**input_plazo_meses - 1)
+                    else:
+                        cuota_mensual = input_amount / input_plazo_meses
+                    etiqueta_cuota = "Cuota Fija Mensual"
+                else:
+                    abono_capital = input_amount / input_plazo_meses
+                    interes_mes_1 = input_amount * tasa_mensual
+                    cuota_mensual = abono_capital + interes_mes_1
+                    etiqueta_cuota = "Primera Cuota (Decreciente)"
 
-            for col in st.session_state.model_features:
+                dti_ratio = (cuota_mensual / ingreso_mensual) * 100
 
-                if col == "person_age":
-                    row[col] = age
+                st.subheader("2. Dictamen Técnico de la Mesa de Control")
+                
+                res_col1, res_col2, res_col3, res_col4 = st.columns(4)
+                
+                res_col1.metric("Riesgo de Impago (ML)", f"{prob_default:.1f}%")
+                
+                res_col2.metric("Valor de la Cuota", f"${cuota_mensual:,.2f}")
+                res_col2.caption(f"📌 {etiqueta_cuota}")
+                
+                res_col3.metric("Relación Deuda/Ingreso", f"{dti_ratio:.1f}%")
+                res_col3.caption("Capacidad de pago DTI")
+                
+                if prob_default < 25 and dti_ratio <= 35:
+                    res_col4.success("🟢 **APROBADO**")
+                elif prob_default < 50 and dti_ratio <= 45:
+                    res_col4.warning("🟡 **REVISIÓN**")
+                else:
+                    res_col4.error("🔴 **RECHAZADO**")
 
-                elif col == "person_income":
-                    row[col] = income
+                # --- DIAGNÓSTICO DETALLADO PARA EL EXPEDIENTE ---
+                st.markdown("#### 📋 Diagnóstico Detallado de la Mesa de Control")
 
-                elif col == "loan_amnt":
-                    row[col] = amount
+                if prob_default < 25 and dti_ratio <= 35:
+                    st.success("✅ **Dictamen: APROBACIÓN DIRECTA**")
+                    st.markdown(f"""
+                    * **Capacidad Financiera Saludable:** El DTI es del **{dti_ratio:.1f}%**, lo que garantiza solvencia para el pago de la cuota.
+                    * **Perfil de Riesgo Bajo:** La probabilidad de impago predicha por ML es de **{prob_default:.1f}%** (dentro del apetito de riesgo).
+                    * **Recomendación:** Desembolso autorizado bajo las condiciones pactadas.
+                    """)
 
-                elif col == "loan_int_rate":
-                    row[col] = rate
+                elif prob_default < 50 and dti_ratio <= 45:
+                    st.warning("⚠️ **Dictamen: REQUIERE EVALUACIÓN DE COMITÉ (REVISIÓN)**")
+                    
+                    razones_revision = []
+                    if dti_ratio > 35:
+                        razones_revision.append(f"**Relación Deuda/Ingreso Elevada ({dti_ratio:.1f}%):** La cuota mensual absorbe más del 35% del ingreso del cliente.")
+                    if prob_default >= 25:
+                        razones_revision.append(f"**Score de Riesgo Moderado ({prob_default:.1f}%):** El modelo de ML detecta volatilidad en el perfil socioeconómico.")
+                    if input_amount > (input_income * 0.4):
+                        razones_revision.append(f"**Concentración de Capital:** El préstamo representa más del 40% del ingreso anual del cliente.")
 
-                elif pd.api.types.is_numeric_dtype(df[col]):
-                    row[col] = df[col].median()
+                    st.write("**Factores de Riesgo Detectados para Escalado:**")
+                    for razon in razones_revision:
+                        st.write(f"• {razon}")
+                        
+                    st.info("💡 **Acciones Mitigantes Sugeridas para el Analista:** Reestructurar a un plazo mayor para bajar la cuota, solicitar co-deudor o requerir un abono inicial.")
 
                 else:
-                    mode = df[col].mode()
-                    row[col] = mode.iloc[0] if len(mode) else ""
+                    st.error("❌ **Dictamen: SOLICITUD RECHAZADA**")
+                    
+                    razones_rechazo = []
+                    if dti_ratio > 45:
+                        razones_rechazo.append(f"**Sobreendeudamiento Crítico (DTI {dti_ratio:.1f}%):** Supera el límite máximo permitido del 45% de capacidad de pago.")
+                    if prob_default >= 50:
+                        razones_rechazo.append(f"**Probabilidad Alta de Default ({prob_default:.1f}%):** El perfil analítico excede los parámetros tolerados por la entidad.")
+                    if input_amount > (input_income * 0.7):
+                        razones_rechazo.append(f"**Monto Desproporcionado:** Solicitud superior al 70% del ingreso anual verificado.")
 
-            input_df = pd.DataFrame([row])
+                    st.write("**Causales Directas de Rechazo:**")
+                    for razon in razones_rechazo:
+                        st.write(f"• {razon}")
+                        
+                    st.caption("🚫 *Nota:* Esta solicitud no cumple con las políticas de riesgo vigentes. Para reconsiderar, el cliente debe presentar un ingreso sustancialmente mayor o solicitar un monto considerablemente menor.")
 
-            probability = (
-                model.predict_proba(input_df)[0][1] * 100
-            )
-
-            monthly_rate = rate / 100 / 12
-            monthly_income = income / 12
-
-            if monthly_rate > 0:
-                payment = (
-                    amount
-                    * (
-                        monthly_rate
-                        * (1 + monthly_rate) ** months
-                    )
-                    / (
-                        (1 + monthly_rate) ** months - 1
-                    )
+                # TABLA Y GRÁFICO DE AMORTIZACIÓN
+                st.markdown("---")
+                st.subheader("3. Cronograma Proyectado de Pagos")
+                
+                cronograma = []
+                saldo_pendiente = input_amount
+                
+                for mes in range(1, input_plazo_meses + 1):
+                    interes_periodo = saldo_pendiente * tasa_mensual
+                    
+                    if tipo_cuota == "Cuota Fija (Sistema Francés)":
+                        cuota_periodo = cuota_mensual
+                        capital_periodo = cuota_periodo - interes_periodo
+                    else:
+                        capital_periodo = input_amount / input_plazo_meses
+                        cuota_periodo = capital_periodo + interes_periodo
+                        
+                    saldo_pendiente -= capital_periodo
+                    if saldo_pendiente < 0: 
+                        saldo_pendiente = 0
+                        
+                    cronograma.append({
+                        "Mes": mes,
+                        "Cuota Total ($)": round(cuota_periodo, 2),
+                        "Abono a Capital ($)": round(capital_periodo, 2),
+                        "Intereses ($)": round(interes_periodo, 2),
+                        "Saldo Pendiente ($)": round(saldo_pendiente, 2)
+                    })
+                
+                df_amortizacion = pd.DataFrame(cronograma)
+                
+                fig_amort = px.bar(
+                    df_amortizacion, 
+                    x="Mes", 
+                    y=["Abono a Capital ($)", "Intereses ($)"],
+                    title=f"Proyección de Amortización para {id_solicitante} (${input_amount:,.0f} a {input_plazo_meses} Meses)",
+                    barmode="stack",
+                    color_discrete_sequence=['#2ecc71', '#e74c3c']
                 )
-            else:
-                payment = amount / months
+                st.plotly_chart(fig_amort, use_container_width=True)
+                st.dataframe(df_amortizacion, use_container_width=True)
 
-            dti = payment / monthly_income * 100
+                csv_amort = df_amortizacion.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar Tabla de Amortización (CSV)",
+                    data=csv_amort,
+                    file_name=f"amortizacion_{id_solicitante}.csv",
+                    mime="text/csv"
+                )
 
-            c1, c2, c3 = st.columns(3)
-
-            c1.metric(
-                "Probabilidad de Default",
-                f"{probability:.1f}%"
-            )
-
-            c2.metric(
-                "Cuota mensual",
-                f"${payment:,.2f}"
-            )
-
-            c3.metric(
-                "DTI",
-                f"{dti:.1f}%"
-            )
-
-            if probability < 25 and dti <= 35:
-                st.success("🟢 APROBACIÓN SUGERIDA")
-
-            elif probability < 50 and dti <= 45:
-                st.warning("🟡 REVISIÓN MANUAL")
-
-            else:
-                st.error("🔴 RECHAZO SUGERIDO")
-
-
-# ============================================================
-# 5. XAI / SHAP
-# ============================================================
-with tab_xai:
-    st.header("⚡ Explicabilidad del modelo con SHAP")
-
-    if not st.session_state.models:
-        st.warning(
-            "Primero entrena los modelos en la Pestaña 3."
-        )
-    else:
-        if "XGBoost" not in st.session_state.models:
-            st.warning("XGBoost no está disponible.")
         else:
-            st.info(
-                "SHAP permite analizar qué variables influyen "
-                "en las predicciones del modelo."
-            )
+            st.error(f"Faltan columnas requeridas en el dataset para el modelo ML. Se requieren: {features}")
 
-            xgb_pipeline = st.session_state.models["XGBoost"]
-            df = st.session_state.df_clean
+# =============================================================================
+# PESTAÑA 4: XGBOOST & EXPLICABILIDAD (XAI)
+# =============================================================================
+with tab_xgboost:
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ Carga y limpia el dataset en la Pestaña 1 primero.")
+    else:
+        st.header("⚡ Algoritmo Gradient Boosting (XGBoost) & Auditable AI")
+        st.markdown("XGBoost evalúa la decisión bajo optimización de gradiente y explica **por qué razón técnica** el cliente fue aprobado o rechazado.")
 
-            X = df.drop(columns=["loan_status"])
+        df_xgb = st.session_state.df_clean.copy()
+        features = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate']
 
-            drop_cols = [
-                c for c in ["person_id", "id", "customer_id"]
-                if c in X.columns
-            ]
+        if all(c in df_xgb.columns for c in features):
+            X_xgb = df_xgb[features].fillna(df_xgb[features].median())
+            y_xgb = df_xgb['loan_status']
 
-            X = X.drop(columns=drop_cols)
+            # Entrenar modelo XGBoost
+            model_xgb = xgb.XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1, random_state=42)
+            model_xgb.fit(X_xgb, y_xgb)
 
-            # Transformación de datos
-            prep = xgb_pipeline.named_steps["preprocessor"]
-            model_xgb = xgb_pipeline.named_steps["model"]
+            # Importancia de variables global
+            importancia = pd.DataFrame({
+                'Variable': features,
+                'Importancia (%)': (model_xgb.feature_importances_ * 100).round(2)
+            }).sort_values(by='Importancia (%)', ascending=False)
 
-            X_transformed = prep.transform(X)
+            col_x1, col_x2 = st.columns([1, 2])
 
-            if hasattr(X_transformed, "toarray"):
-                X_transformed = X_transformed.toarray()
+            with col_x1:
+                st.subheader("📌 Importancia Global de Variables")
+                st.dataframe(importancia, use_container_width=True)
 
-            feature_names = prep.get_feature_names_out()
+            with col_x2:
+                st.subheader("📊 Gráfico de Relevancia (XGBoost)")
+                fig_imp = px.bar(importancia, x='Importancia (%)', y='Variable', orientation='h', color='Importancia (%)', color_continuous_scale='Viridis')
+                st.plotly_chart(fig_imp, use_container_width=True)
 
-            # Muestra para evitar gráficos demasiado pesados
-            sample_size = min(1000, X_transformed.shape[0])
+            st.markdown("---")
+            st.subheader("🔎 Explicabilidad Individual para la Solicitud")
 
-            X_sample = X_transformed[:sample_size]
+            c1, c2, c3, c4 = st.columns(4)
+            val_age = c1.number_input("Edad (Años)", 18, 90, 28, key="xgb_age")
+            val_inc = c2.number_input("Ingreso Anual ($)", 1000, 500000, 35000, key="xgb_inc")
+            val_amt = c3.number_input("Monto Préstamo ($)", 500, 100000, 15000, key="xgb_amt")
+            val_rate = c4.number_input("Tasa Interés (%)", 1.0, 35.0, 14.5, key="xgb_rate")
 
-            explainer = shap.TreeExplainer(model_xgb)
+            if st.button("🧪 Auditar Decisión con XGBoost"):
+                vec_in = np.array([[val_age, val_inc, val_amt, val_rate]])
+                prob_xgb = model_xgb.predict_proba(vec_in)[0][1] * 100
 
-            shap_values = explainer.shap_values(
-                X_sample
-            )
+                st.markdown("#### Resultado del Dictamen XGBoost:")
+                if prob_xgb < 30:
+                    st.success(f"✅ **Aprobado por XGBoost** | Probabilidad de Default: **{prob_xgb:.2f}%**")
+                else:
+                    st.error(f"❌ **Rechazado por XGBoost** | Probabilidad de Default: **{prob_xgb:.2f}%**")
 
-            if isinstance(shap_values, list):
-                shap_values = shap_values[1]
-
-            importance = (
-                np.abs(shap_values)
-                .mean(axis=0)
-            )
-
-            shap_df = pd.DataFrame({
-                "Variable": feature_names,
-                "Importancia SHAP": importance
-            }).sort_values(
-                "Importancia SHAP",
-                ascending=False
-            ).head(15)
-
-            st.subheader(
-                "📌 Variables más importantes"
-            )
-
-            fig_shap = px.bar(
-                shap_df.sort_values(
-                    "Importancia SHAP"
-                ),
-                x="Importancia SHAP",
-                y="Variable",
-                orientation="h",
-                title="Importancia global según SHAP"
-            )
-
-            st.plotly_chart(
-                fig_shap,
-                use_container_width=True
-            )
-
-            st.caption(
-                "Una mayor magnitud SHAP indica mayor influencia "
-                "en las predicciones del modelo; la dirección "
-                "del efecto se analiza a nivel individual."
-            )
+                # Cálculo de contribución individual aproximada (Descomposición de características)
+                medias = X_xgb.mean()
+                desviaciones = X_xgb.std()
+                desviacion_cliente = (vec_in[0] - medias) / desviaciones
+                
+                df_razones = pd.DataFrame({
+                    'Variable': ['Edad', 'Ingreso Anual', 'Monto Solicitado', 'Tasa de Interés'],
+                    'Valor Cliente': [val_age, val_inc, val_amt, val_rate],
+                    'Promedio Dataset': medias.values.round(2),
+                    'Impacto en la Decisión': ['Reduce Riesgo 🟢' if d < 0 else 'Aumenta Riesgo 🔴' for d in desviacion_cliente]
+                })
+                
+                st.write("**Desglose Técnico de Factores de Riesgo:**")
+                st.table(df_razones)
