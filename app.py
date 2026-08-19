@@ -1,14 +1,15 @@
+import os
+# Silenciar avisos/warnings de TensorFlow antes de importarlo
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 import xgboost as xgb
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
@@ -20,7 +21,7 @@ st.set_page_config(
 )
 
 st.title("🏦 Plataforma Enterprise de Riesgo Crediticio")
-st.markdown("Carga & EDA $\rightarrow$ Dashboard $\rightarrow$ Calculadora ML $\rightarrow$ **XGBoost & XAI (SHAP)** $\rightarrow$ **Deep Learning (MLP)**")
+st.markdown("Carga & EDA $\rightarrow$ Dashboard $\rightarrow$ Calculadora ML $\rightarrow$ **XGBoost & XAI** $\rightarrow$ **Deep Learning (MLP)**")
 
 # -----------------------------------------------------------------------------
 # GESTIÓN DEL ESTADO GLOBAL
@@ -76,7 +77,8 @@ with tab_eda:
 
         if st.button("🛠️ Aplicar Limpieza"):
             df_temp = st.session_state.df_raw.copy()
-            if drop_dups: df_temp = df_temp.drop_duplicates()
+            if drop_dups: 
+                df_temp = df_temp.drop_duplicates()
             
             if estrategia_nulos == "Eliminar filas con nulos":
                 df_temp = df_temp.dropna()
@@ -97,8 +99,10 @@ with tab_eda:
                     IQR = Q3 - Q1
                     df_temp = df_temp[(df_temp[col] >= Q1 - factor_iqr * IQR) & (df_temp[col] <= Q3 + factor_iqr * IQR)]
 
-            if 'person_age' in df_temp.columns: df_temp['person_age'] = df_temp['person_age'].astype(int)
-            if 'loan_status' in df_temp.columns: df_temp['loan_status'] = df_temp['loan_status'].astype(int)
+            if 'person_age' in df_temp.columns: 
+                df_temp['person_age'] = df_temp['person_age'].astype(int)
+            if 'loan_status' in df_temp.columns: 
+                df_temp['loan_status'] = df_temp['loan_status'].astype(int)
 
             st.session_state.df_clean = df_temp
             st.success(f"✅ Dataset procesado con éxito: {len(df_temp):,} registros finales.")
@@ -123,7 +127,8 @@ with tab_dashboard:
         st.markdown("---")
         col_c1, col_c2 = st.columns(2)
         with col_c1:
-            st.plotly_chart(px.histogram(df, x="loan_intent", color="loan_status", barmode="group", title="Distribución por Propósito"), use_container_width=True)
+            if "loan_intent" in df.columns:
+                st.plotly_chart(px.histogram(df, x="loan_intent", color="loan_status", barmode="group", title="Distribución por Propósito"), use_container_width=True)
         with col_c2:
             st.plotly_chart(px.scatter(df.sample(min(1000, len(df))), x="person_income", y="loan_amnt", color="loan_status", title="Ingreso vs Monto Solicitado"), use_container_width=True)
 
@@ -135,7 +140,6 @@ with tab_predictor:
         st.warning("⚠️ Debes cargar y limpiar el dataset en la Pestaña 1.")
     else:
         st.header("🏢 Calculadora de Evaluación y Amortización")
-        st.caption("🔒 Identificadores sintéticos anonimizados.")
         
         df_ml = st.session_state.df_clean.copy()
         features = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate']
@@ -151,7 +155,6 @@ with tab_predictor:
             with col_f1:
                 input_age = st.number_input("Edad", 18, 90, 30)
                 input_income = st.number_input("Ingreso Anual ($)", 1000, 1000000, 45000, 5000)
-                cat = st.selectbox("Categoría", ["PERSONAL", "EDUCATION", "MEDICAL", "VENTURE", "HOMEIMPROVEMENT", "DEBTCONSOLIDATION"])
             
             with col_f2:
                 input_plazo = st.slider("Plazo (Meses)", 6, 84, 36, 6)
@@ -168,7 +171,7 @@ with tab_predictor:
                     st.info(f"💡 Monto Máximo Sugerido: **${monto_max:,.2f}**")
                     input_amount = float(np.round(monto_max, -2))
 
-            if st.button("📊 Evaluacion Financiera ML"):
+            if st.button("📊 Evaluación Financiera ML"):
                 prob_default = model_rf.predict_proba([[input_age, input_income, input_amount, input_rate]])[0][1] * 100
                 cuota_m = input_amount * (tasa_m * (1 + tasa_m)**input_plazo) / ((1 + tasa_m)**input_plazo - 1) if tipo_cuota == "Cuota Fija (Sistema Francés)" else (input_amount / input_plazo) + (input_amount * tasa_m)
                 dti = (cuota_m / ingreso_m) * 100
@@ -198,11 +201,9 @@ with tab_xgboost:
             X_xgb = df_xgb[features].fillna(df_xgb[features].median())
             y_xgb = df_xgb['loan_status']
 
-            # Entrenar modelo XGBoost
             model_xgb = xgb.XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1, random_state=42)
             model_xgb.fit(X_xgb, y_xgb)
 
-            # Importancia de variables global
             importancia = pd.DataFrame({
                 'Variable': features,
                 'Importancia (%)': (model_xgb.feature_importances_ * 100).round(2)
@@ -238,7 +239,6 @@ with tab_xgboost:
                 else:
                     st.error(f"❌ **Rechazado por XGBoost** | Probabilidad de Default: **{prob_xgb:.2f}%**")
 
-                # Cálculo de contribución individual aproximada (Descomposición de características)
                 medias = X_xgb.mean()
                 desviaciones = X_xgb.std()
                 desviacion_cliente = (vec_in[0] - medias) / desviaciones
@@ -256,34 +256,33 @@ with tab_xgboost:
 # =============================================================================
 # PESTAÑA 5: DEEP LEARNING (MLP) & PÉRDIDA ESPERADA
 # =============================================================================
-with tab_dl = st.tabs(["..."])[0] if False else tab_dl: # Conexión interna
 with tab_dl:
     if st.session_state.df_clean is None:
         st.warning("⚠️ Carga y limpia el dataset en la Pestaña 1 primero.")
     else:
         st.header("🧠 Red Neuronal Profunda (Multilayer Perceptron - MLP)")
-        st.markdown("Red Neuronal de 3 capas densas para estimación de **Segmento de Riesgo Multi-Clase** y cálculo de **Pérdida Esperada (Expected Loss - EL)**.")
+        st.markdown("Red Neuronal de 3 capas densas para estimación de **Segmento de Riesgo** y cálculo de **Pérdida Esperada (Expected Loss - EL)**.")
 
         df_dl = st.session_state.df_clean.copy()
         features = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate']
 
         if all(c in df_dl.columns for c in features):
-            # Normalización (Estandarización de datos para Deep Learning)
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(df_dl[features].fillna(df_dl[features].median()))
             y_dl = df_dl['loan_status'].values
 
-            # Construcción de la Red Neuronal con Keras/TensorFlow
+            # Modelo Keras usando TensorFlow CPU optimizado
             @st.cache_resource
             def entrenar_red_neuronal(X_train, y_train):
-                model = Sequential([
-                    Dense(16, activation='relu', input_shape=(4,)),
-                    Dropout(0.2),
-                    Dense(8, activation='relu'),
-                    Dense(1, activation='sigmoid')
+                model = tf.keras.models.Sequential([
+                    tf.keras.layers.Dense(16, activation='relu', input_shape=(4,)),
+                    tf.keras.layers.Dropout(0.2),
+                    tf.keras.layers.Dense(8, activation='relu'),
+                    tf.keras.layers.Dense(1, activation='sigmoid')
                 ])
                 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-                model.fit(X_train, y_train, epochs=20, batch_size=64, verbose=0)
+                # Epochs optimizados a 10 para mayor velocidad en el despliegue
+                model.fit(X_train, y_train, epochs=10, batch_size=64, verbose=0)
                 return model
 
             with st.spinner("🧠 Entrenando arquitectura de Red Neuronal Profunda..."):
@@ -296,20 +295,16 @@ with tab_dl:
 
             col_d1, col_d2 = st.columns(2)
             with col_d1:
-                dl_age = st.number_input("Edad Solicitante", 18, 90, 32)
-                dl_inc = st.number_input("Ingreso Anual ($)", 1000, 500000, 50000)
+                dl_age = st.number_input("Edad Solicitante", 18, 90, 32, key="dl_age")
+                dl_inc = st.number_input("Ingreso Anual ($)", 1000, 500000, 50000, key="dl_inc")
             with col_d2:
-                dl_amt = st.number_input("Monto Préstamo ($)", 500, 100000, 18000)
-                dl_rate = st.number_input("Tasa Interés (%)", 1.0, 35.0, 12.0)
+                dl_amt = st.number_input("Monto Préstamo ($)", 500, 100000, 18000, key="dl_amt")
+                dl_rate = st.number_input("Tasa Interés (%)", 1.0, 35.0, 12.0, key="dl_rate")
 
             if st.button("🧠 Evaluar con Red Neuronal"):
-                # Escalar la entrada del cliente
                 cliente_scaled = scaler.transform([[dl_age, dl_inc, dl_amt, dl_rate]])
-                pred_prob_dl = float(nn_model.predict(cliente_scaled)[0][0]) * 100
+                pred_prob_dl = float(nn_model.predict(cliente_scaled, verbose=0)[0][0]) * 100
 
-                # Cálculo del Modelo Financiero de Pérdida Esperada: EL = PD * LGD * EAD
-                # LGD (Loss Given Default) asumido en 45% (estándar Basilea II)
-                # EAD (Exposure at Default) = Monto del Préstamo
                 pd_val = pred_prob_dl / 100
                 lgd = 0.45 
                 ead = dl_amt
@@ -320,7 +315,6 @@ with tab_dl:
 
                 m1.metric("Probabilidad Impago (PD)", f"{pred_prob_dl:.2f}%")
                 
-                # Clasificación en Perfiles de Riesgo Tri-Clase
                 if pred_prob_dl < 20:
                     perfil = "🟢 PERFIL A (Bajo Riesgo)"
                 elif pred_prob_dl < 45:
