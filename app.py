@@ -225,7 +225,7 @@ with tab_dashboard:
 
 
 # =============================================================================
-# PESTAÑA 3: SIMULADOR Y CALCULADORA CREDITICIA (ENFOQUE CORPORATIVO)
+# PESTAÑA 3: CALCULADORA DE RIESGO, AMORTIZACIÓN Y DIAGNÓSTICO
 # =============================================================================
 with tab_predictor:
     if st.session_state.df_clean is None:
@@ -234,7 +234,6 @@ with tab_predictor:
         st.header("🏢 Calculadora de Evaluación y Amortización para Analistas de Riesgo")
         st.caption("🔒 **Aviso de Privacidad & Gobernanza de Datos:** Esta herramienta utiliza identificadores sintéticos anonimizados. No se procesan ni almacenan documentos de identidad ni PII (Información Personal Identificable).")
 
-        # Entrenar modelo con los datos limpios de la sesión
         df_ml = st.session_state.df_clean.copy()
         features = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate']
         
@@ -247,7 +246,6 @@ with tab_predictor:
 
             st.markdown("---")
             
-            # --- SELECTOR DEL MODO DE SIMULACIÓN ---
             modo_simulacion = st.radio(
                 "🎯 Selecciona el Objetivo de la Simulación:",
                 ["Modo A: Evaluar un Monto Específico Solicitado", "Modo B: Calcular Capacidad Máxima de Préstamo (Sugerido)"],
@@ -287,33 +285,28 @@ with tab_predictor:
                 
                 tipo_cuota = st.selectbox("Sistema de Amortización", ["Cuota Fija (Sistema Francés)", "Cuota Variable (Sistema Alemán)"])
 
-                # LÓGICA DE CÁLCULO SEGÚN EL MODO ELEGIDO
                 tasa_mensual = (input_rate / 100) / 12
                 ingreso_mensual = input_income / 12
                 
                 if "Modo A" in modo_simulacion:
                     input_amount = st.number_input("Monto Solicitado a Evaluar ($)", min_value=500, max_value=200000, value=12000, step=1000)
                 else:
-                    # MODO B: Calcular monto máximo recomendado para un DTI del 30%
                     cuota_maxima_permitida = ingreso_mensual * 0.30
                     if tasa_mensual > 0:
                         monto_max_calculado = cuota_maxima_permitida * (((1 + tasa_mensual)**input_plazo_meses - 1) / (tasa_mensual * (1 + tasa_mensual)**input_plazo_meses))
                     else:
                         monto_max_calculado = cuota_maxima_permitida * input_plazo_meses
                     
-                    st.info(f"💡 **Monto Máximo Sugerido:** Es de **${monto_max_calculado:,.2f}** para no exceder un DTI razonable del 30%.")
+                    st.info(f"💡 **Monto Máximo Sugerido:** Es de **${monto_max_calculado:,.2f}** para no exceder un DTI del 30%.")
                     input_amount = float(np.round(monto_max_calculado, -2))
 
             st.markdown("---")
             
-            # --- EJECUCIÓN Y DICTAMEN ---
             if st.button("📊 Generar Dictamen y Amortización"):
                 
-                # Predicción de Machine Learning
                 input_data = np.array([[input_age, input_income, input_amount, input_rate]])
                 prob_default = model.predict_proba(input_data)[0][1] * 100
                 
-                # Cálculos Financieros
                 if tipo_cuota == "Cuota Fija (Sistema Francés)":
                     if tasa_mensual > 0:
                         cuota_mensual = input_amount * (tasa_mensual * (1 + tasa_mensual)**input_plazo_meses) / ((1 + tasa_mensual)**input_plazo_meses - 1)
@@ -328,14 +321,12 @@ with tab_predictor:
 
                 dti_ratio = (cuota_mensual / ingreso_mensual) * 100
 
-                # RESULTADOS CON FORMATO LIMPIO
                 st.subheader("2. Dictamen Técnico de la Mesa de Control")
                 
                 res_col1, res_col2, res_col3, res_col4 = st.columns(4)
                 
                 res_col1.metric("Riesgo de Impago (ML)", f"{prob_default:.1f}%")
                 
-                # Se formatea limpiamente el KPI de la cuota
                 res_col2.metric("Valor de la Cuota", f"${cuota_mensual:,.2f}")
                 res_col2.caption(f"📌 {etiqueta_cuota}")
                 
@@ -349,7 +340,52 @@ with tab_predictor:
                 else:
                     res_col4.error("🔴 **RECHAZADO**")
 
-                # TABLA DE AMORTIZACIÓN
+                # --- DIAGNÓSTICO DETALLADO PARA EL EXPEDIENTE ---
+                st.markdown("#### 📋 Diagnóstico Detallado de la Mesa de Control")
+
+                if prob_default < 25 and dti_ratio <= 35:
+                    st.success("✅ **Dictamen: APROBACIÓN DIRECTA**")
+                    st.markdown(f"""
+                    * **Capacidad Financiera Saludable:** El DTI es del **{dti_ratio:.1f}%**, lo que garantiza solvencia para el pago de la cuota.
+                    * **Perfil de Riesgo Bajo:** La probabilidad de impago predicha por ML es de **{prob_default:.1f}%** (dentro del apetito de riesgo).
+                    * **Recomendación:** Desembolso autorizado bajo las condiciones pactadas.
+                    """)
+
+                elif prob_default < 50 and dti_ratio <= 45:
+                    st.warning("⚠️ **Dictamen: REQUIERE EVALUACIÓN DE COMITÉ (REVISIÓN)**")
+                    
+                    razones_revision = []
+                    if dti_ratio > 35:
+                        razones_revision.append(f"**Relación Deuda/Ingreso Elevada ({dti_ratio:.1f}%):** La cuota mensual absorbe más del 35% del ingreso del cliente.")
+                    if prob_default >= 25:
+                        razones_revision.append(f"**Score de Riesgo Moderado ({prob_default:.1f}%):** El modelo de ML detecta volatilidad en el perfil socioeconómico.")
+                    if input_amount > (input_income * 0.4):
+                        razones_revision.append(f"**Concentración de Capital:** El préstamo representa más del 40% del ingreso anual del cliente.")
+
+                    st.write("**Factores de Riesgo Detectados para Escalado:**")
+                    for razon in razones_revision:
+                        st.write(f"• {razon}")
+                        
+                    st.info("💡 **Acciones Mitigantes Sugeridas para el Analista:** Reestructurar a un plazo mayor para bajar la cuota, solicitar co-deudor o requerir un abono inicial.")
+
+                else:
+                    st.error("❌ **Dictamen: SOLICITUD RECHAZADA**")
+                    
+                    razones_rechazo = []
+                    if dti_ratio > 45:
+                        razones_rechazo.append(f"**Sobreendeudamiento Crítico (DTI {dti_ratio:.1f}%):** Supera el límite máximo permitido del 45% de capacidad de pago.")
+                    if prob_default >= 50:
+                        razones_rechazo.append(f"**Probabilidad Alta de Default ({prob_default:.1f}%):** El perfil analítico excede los parámetros tolerados por la entidad.")
+                    if input_amount > (input_income * 0.7):
+                        razones_rechazo.append(f"**Monto Desproporcionado:** Solicitud superior al 70% del ingreso anual verificado.")
+
+                    st.write("**Causales Directas de Rechazo:**")
+                    for razon in razones_rechazo:
+                        st.write(f"• {razon}")
+                        
+                    st.caption("🚫 *Nota:* Esta solicitud no cumple con las políticas de riesgo vigentes. Para reconsiderar, el cliente debe presentar un ingreso sustancialmente mayor o solicitar un monto considerablemente menor.")
+
+                # TABLA Y GRÁFICO DE AMORTIZACIÓN
                 st.markdown("---")
                 st.subheader("3. Cronograma Proyectado de Pagos")
                 
@@ -390,6 +426,14 @@ with tab_predictor:
                 )
                 st.plotly_chart(fig_amort, use_container_width=True)
                 st.dataframe(df_amortizacion, use_container_width=True)
+
+                csv_amort = df_amortizacion.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar Tabla de Amortización (CSV)",
+                    data=csv_amort,
+                    file_name=f"amortizacion_{id_solicitante}.csv",
+                    mime="text/csv"
+                )
 
         else:
             st.error(f"Faltan columnas requeridas en el dataset para el modelo ML. Se requieren: {features}")
