@@ -160,15 +160,15 @@ with tab_eda:
 
 
 # =============================================================================
-# PESTAÑA 2: DASHBOARD DE NEGOCIO Y FILTROS
+# PESTAÑA 2: DASHBOARD DE NEGOCIO Y FILTROS (OPTIMIZADO)
 # =============================================================================
 with tab_dashboard:
     if st.session_state.df_clean is None:
         st.warning("⚠️ Debes cargar y limpiar el dataset en la **Pestaña 1 (EDA)** antes de acceder al Dashboard.")
     else:
         df = st.session_state.df_clean.copy()
-        
-        # BARRA LATERAL DE FILTROS (Se activa cuando hay datos limpios)
+
+        # BARRA LATERAL DE FILTROS
         st.sidebar.header("🔍 Filtros del Dashboard")
 
         intenciones = ['Todas'] + list(df['loan_intent'].dropna().unique()) if 'loan_intent' in df.columns else ['Todas']
@@ -177,12 +177,12 @@ with tab_dashboard:
         min_age, max_age = int(df['person_age'].min()), int(df['person_age'].max())
         edad_rango = st.sidebar.slider("Rango de Edad del Cliente", min_age, max_age, (min_age, max_age))
 
-        # Aplicar filtros
+        # Aplicar filtros al DataFrame
         df_filtered = df[(df['person_age'] >= edad_rango[0]) & (df['person_age'] <= edad_rango[1])]
         if intencion_selected != 'Todas' and 'loan_intent' in df_filtered.columns:
             df_filtered = df_filtered[df_filtered['loan_intent'] == intencion_selected]
 
-        # KPIs
+        # KPIs Principales
         col1, col2, col3, col4 = st.columns(4)
         total_prestado = df_filtered['loan_amnt'].sum()
         tasa_morosidad = (df_filtered['loan_status'].mean()) * 100
@@ -196,34 +196,70 @@ with tab_dashboard:
 
         st.markdown("---")
 
-        # Gráficos Plotly
+        # VISUALIZACIONES OPTIMIZADAS
         col_chart1, col_chart2 = st.columns(2)
 
+        # ---------------------------------------------------------------------
+        # GRÁFICO 1: Tasa de Morosidad Relativa por Propósito (%)
+        # ---------------------------------------------------------------------
         with col_chart1:
-            st.subheader("📊 Distribución de Préstamos por Propósito")
+            st.subheader("📊 Tasa de Morosidad por Propósito del Crédito")
             if 'loan_intent' in df_filtered.columns:
-                fig_intent = px.histogram(
-                    df_filtered, 
-                    x="loan_intent", 
-                    color="loan_status", 
-                    barmode="group",
-                    labels={"loan_intent": "Propósito", "count": "Número de Créditos", "loan_status": "Default (1)"},
-                    color_discrete_sequence=['#2ecc71', '#e74c3c']
+                # Agregación para calcular el % real de mora por categoría
+                df_intent_risk = (
+                    df_filtered.groupby('loan_intent')['loan_status']
+                    .agg(Total='count', Default='sum')
+                    .reset_index()
                 )
+                df_intent_risk['Tasa_Default_%'] = (df_intent_risk['Default'] / df_intent_risk['Total'] * 100).round(2)
+                df_intent_risk = df_intent_risk.sort_values(by='Tasa_Default_%', ascending=False)
+
+                fig_intent = px.bar(
+                    df_intent_risk,
+                    x="loan_intent",
+                    y="Tasa_Default_%",
+                    text="Tasa_Default_%",
+                    color="Tasa_Default_%",
+                    labels={"loan_intent": "Propósito del Crédito", "Tasa_Default_%": "% Morosidad"},
+                    color_continuous_scale="Reds",
+                    title="Porcentaje Real de Impago por Categoría"
+                )
+                fig_intent.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                fig_intent.update_layout(yaxis_range=[0, max(df_intent_risk['Tasa_Default_%']) * 1.25], showlegend=False)
+                
                 st.plotly_chart(fig_intent, use_container_width=True)
 
+        # ---------------------------------------------------------------------
+        # GRÁFICO 2: Mapa de Calor (Matriz de Correlación de Factores)
+        # ---------------------------------------------------------------------
         with col_chart2:
-            st.subheader("📉 Relación Ingreso vs. Monto Solicitado")
-            fig_scatter = px.scatter(
-                df_filtered.sample(min(1000, len(df_filtered))), 
-                x="person_income", 
-                y="loan_amnt", 
-                color="loan_status",
-                labels={"person_income": "Ingreso Anual ($)", "loan_amnt": "Monto del Préstamo ($)"},
-                opacity=0.6,
-                color_discrete_sequence=['#3498db', '#e74c3c']
-            )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            st.subheader("🔥 Mapa de Calor: Correlación entre Variables")
+            cols_corr = ['person_age', 'person_income', 'loan_amnt', 'loan_int_rate', 'loan_status']
+            cols_existentes = [c for c in cols_corr if c in df_filtered.columns]
+
+            if len(cols_existentes) > 1:
+                # Renombrar columnas para mejor lectura en el heatmap
+                nombres_limpios = {
+                    'person_age': 'Edad',
+                    'person_income': 'Ingreso',
+                    'loan_amnt': 'Monto Préstamo',
+                    'loan_int_rate': 'Tasa Interés',
+                    'loan_status': 'Default (Riesgo)'
+                }
+                
+                corr_matrix = df_filtered[cols_existentes].rename(columns=nombres_limpios).corr().round(2)
+
+                fig_heatmap = px.imshow(
+                    corr_matrix,
+                    text_auto=True,
+                    aspect="auto",
+                    color_continuous_scale="RdBu_r",
+                    zmin=-1, zmax=1,
+                    title="Intensidad de Relación entre Factores Financieros"
+                )
+                st.plotly_chart(fig_heatmap, use_container_width=True)
+            else:
+                st.info("No hay suficientes variables numéricas para calcular el mapa de calor.")
 
 
 # =============================================================================
