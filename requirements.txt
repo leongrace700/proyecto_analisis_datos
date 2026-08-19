@@ -3,6 +3,3 @@ pandas
 numpy
 plotly
 scikit-learn
-openpyxl
-xgboost
-tensorflow-cpu
