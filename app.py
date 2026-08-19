@@ -35,13 +35,8 @@ tab_eda, tab_dashboard, tab_predictor = st.tabs([
     "🤖 3. Simulador Predictivo (ML)"
 ])
 
+   
 # =============================================================================
-# PESTAÑA 1: EDA Y LIMPIEZA DE DATOS
-# =============================================================================
-with tab_eda:
-    st.header("🔍 Carga de Archivo y Análisis Exploratorio (EDA)")
-    
-    # =============================================================================
 # PESTAÑA 1: EDA Y LIMPIEZA DE DATOS (AVANZADA)
 # =============================================================================
 with tab_eda:
