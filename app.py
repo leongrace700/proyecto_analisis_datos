@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y TEMA CLARO / ELEGANTE
+# CONFIGURACIÓN DE PÁGINA Y TEMA CLARO
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Monitor Financiero & Cotizador de Créditos Colombia",
@@ -13,24 +13,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS personalizado en tonos claros con alta legibilidad
 st.markdown("""
     <style>
-    /* Fondo principal y tipografía general */
     .stApp {
         background-color: #F8F9FA;
         color: #212529;
         font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
     
-    /* Contenedores y Tarjetas */
     div[data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
         font-weight: 700;
         color: #0F52BA;
     }
     
-    /* Estilo de Pestañas */
     .stTabs [data-baseweb="tab-list"] {
         gap: 12px;
         background-color: #E9ECEF;
@@ -53,16 +49,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# FUNCIONES AUXILIARES DE CÁLCULO FINANCIERO (SISTEMA COLOMBIANO)
+# FUNCIONES AUXILIARES DE CÁLCULO FINANCIERO
 # -----------------------------------------------------------------------------
 def ea_to_em(tasa_ea):
-    """Convierte Tasa Efectiva Anual (E.A.) a Efectiva Mensual (E.M.)"""
     if pd.isna(tasa_ea) or tasa_ea <= 0:
         return 0.0
     return ((1 + tasa_ea / 100.0) ** (1.0 / 12.0) - 1.0)
 
 def calcular_cuota_fija(monto, tasa_ea, plazo_meses):
-    """Calcula cuota mensual fija (Amortización Sistema Francés)"""
     if plazo_meses <= 0 or monto <= 0:
         return 0.0, 0.0, 0.0
     
@@ -77,13 +71,11 @@ def calcular_cuota_fija(monto, tasa_ea, plazo_meses):
     return cuota, total_intereses, total_pagar
 
 # -----------------------------------------------------------------------------
-# LIMPIEZA Y TRANSFORMACIÓN DE DATOS DINÁMICA (EDA)
+# LIMPIEZA Y CARGA DE DATOS SIN CACHÉ
 # -----------------------------------------------------------------------------
 def clean_data(df):
-    """Aplica reglas de negocio y limpieza a cualquier dataset cargado."""
     df = df.copy()
 
-    # 1. Normalización de nombres de columnas
     df.columns = (
         df.columns.str.strip()
         .str.lower()
@@ -96,7 +88,6 @@ def clean_data(df):
         .str.replace("ñ", "n")
     )
 
-    # Mapeo flexible de columnas comunes
     col_map = {
         'nombre_de_la_entidad': 'nombre_entidad',
         'entidad': 'nombre_entidad',
@@ -112,21 +103,17 @@ def clean_data(df):
     }
     df = df.rename(columns=col_map)
 
-    # 2. Conversión de Fechas
     fecha_cols = [c for c in df.columns if 'fecha' in c or 'created' in c or 'updated' in c]
     for col in fecha_cols:
         df[col] = pd.to_datetime(df[col], errors='coerce')
 
-    # 3. Conversión de Tipos de Datos Numéricos
     num_cols = ['tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos', 'margen_adicional_a_la']
     for col in num_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # 4. Eliminación de Duplicados
     df = df.drop_duplicates()
 
-    # 5. Tratamiento de Nulos y Filtro Prudencial
     if 'tasa_efectiva_promedio' in df.columns:
         df = df[df['tasa_efectiva_promedio'] > 0]
         df = df[(df['tasa_efectiva_promedio'] >= 1.0) & (df['tasa_efectiva_promedio'] <= 100.0)]
@@ -142,6 +129,19 @@ def clean_data(df):
 
     return df
 
+def load_default_data():
+    raw_data = [
+        {"nombre_entidad": "BANCO DE BOGOTA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 18.50, "monto_desembolsado": 4500000000, "numero_creditos": 1200},
+        {"nombre_entidad": "BANCOLOMBIA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 20.10, "monto_desembolsado": 8900000000, "numero_creditos": 3100},
+        {"nombre_entidad": "DAVIVIENDA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 22.30, "monto_desembolsado": 6200000000, "numero_creditos": 2100},
+        {"nombre_entidad": "BBVA COLOMBIA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 19.80, "monto_desembolsado": 3800000000, "numero_creditos": 980},
+        {"nombre_entidad": "BANCO DE BOGOTA", "tipo_credito": "Vivienda", "tasa_efectiva_promedio": 14.20, "monto_desembolsado": 12000000000, "numero_creditos": 300},
+        {"nombre_entidad": "BANCOLOMBIA", "tipo_credito": "Vivienda", "tasa_efectiva_promedio": 13.80, "monto_desembolsado": 18000000000, "numero_creditos": 520},
+    ]
+    return clean_data(pd.DataFrame(raw_data))
+
+if 'df_clean' not in st.session_state:
+    st.session_state.df_clean = load_default_data()
 
 # -----------------------------------------------------------------------------
 # INTERFAZ Y PESTAÑAS
@@ -156,7 +156,7 @@ tab_eda, tab_dashboard, tab_simulador, tab_analysis = st.tabs([
 ])
 
 # =============================================================================
-# PESTAÑA 1: CARGAR Y EXPLORAR DATOS (EDA CUSTOM)
+# PESTAÑA 1: CARGAR Y EXPLORAR DATOS
 # =============================================================================
 with tab_eda:
     st.header("🔍 Carga y Limpieza de Datos")
@@ -172,12 +172,13 @@ with tab_eda:
                 df_custom = pd.read_excel(uploaded_file)
             
             st.session_state.df_clean = clean_data(df_custom)
-            st.success("✅ Archivo cargado y procesado exitosamente mediante el pipeline EDA.")
+            st.success("✅ Archivo cargado y procesado exitosamente.")
         except Exception as e:
             st.error(f"Error al procesar el archivo: {e}")
 
     st.markdown("---")
     st.markdown("### 📋 Vista Previa del Dataset Activo")
+    st.dataframe(st.session_state.df_clean, use_container_width=True)
 
 # =============================================================================
 # PESTAÑA 2: DASHBOARD DE TASAS Y MERCADO
@@ -185,6 +186,7 @@ with tab_eda:
 with tab_dashboard:
     st.header("📊 Dashboard Financiero General")
     
+    df_curr = st.session_state.df_clean
     
     col1, col2, col3 = st.columns(3)
     if 'tasa_efectiva_promedio' in df_curr.columns:
@@ -322,7 +324,7 @@ with tab_simulador:
         st.plotly_chart(fig_bar, use_container_width=True)
 
 # =============================================================================
-# PESTAÑA 4: ANÁLISIS E INTERPRETACIÓN DE OPCIONES (VERSIÓN DIDÁCTICA)
+# PESTAÑA 4: ANÁLISIS E INTERPRETACIONAL DIDÁCTICO
 # =============================================================================
 with tab_analysis:
     st.header("📈 Diagnóstico e Interpretación Financiera")
@@ -333,7 +335,6 @@ with tab_analysis:
     if df_curr.empty or 'tasa_efectiva_promedio' not in df_curr.columns or 'nombre_entidad' not in df_curr.columns:
         st.warning("Se requieren datos válidos cargados para generar el análisis interpretativo.")
     else:
-        # 1. Preparación de datos clave
         df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio')
         
         mejor_banco = df_rank.iloc[0]
@@ -342,8 +343,7 @@ with tab_analysis:
         diferencial_tasas = peor_banco['tasa_efectiva_promedio'] - mejor_banco['tasa_efectiva_promedio']
         ahorro_vs_promedio = tasa_promedio_mkt - mejor_banco['tasa_efectiva_promedio']
 
-        # 2. Resumen Visual (Dashboard Consolidado de la Pestaña 2)
-        st.markdown("### 📊 Consolidated Dashboard Summary")
+        st.markdown("### 📊 Datos Consolidados del Mercado")
         c1, c2 = st.columns([2, 1])
         
         with c1:
@@ -368,24 +368,20 @@ with tab_analysis:
 
         st.markdown("---")
         
-        # 3. Módulos Didácticos de Interpretación
         st.markdown("### 🧠 ¿Qué significan estos números para tu dinero?")
 
-        # TARJETA 1: LA MEJOR OPCIÓN (ÉXITO - VERDE)
         st.success(f"""
         ### 🏆 1. La Opción Ganadora: **{mejor_banco['nombre_entidad']}**
         * **Tasa Ofrecida:** **{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.**
         * **Ventaja Clave:** Se ubica **{ahorro_vs_promedio:.2f}% por debajo** del promedio del mercado. Es la alternativa que menor costo financiero generará sobre tu capital desembolsado.
         """)
 
-        # TARJETA 2: ALERTA DE RIESGO / SOBRECOSTO (ADVERTENCIA - AMARILLO/ROJO)
         st.warning(f"""
         ### ⚠️ 2. La Opción Menos Conveniente: **{peor_banco['nombre_entidad']}**
         * **Tasa Ofrecida:** **{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.**
-        * **Impacto Financiero:** Hay una brecha de **{diferencial_tasas:.2f}%** entre la mejor y la peor opción. Tomar tu crédito aquí implica pagar intereses considerablemente más altos por exactamente la misma suma prestada.
+        * **Impacto Financiero:** Hay una brecha de **{diferencial_tasas:.2f}%** entre la mejor y la peor opción. Tomar tu crédito aquí implica pagar intereses efectivamente más altos por exactamente la misma suma.
         """)
 
-        # TARJETA 3: GUÍA DIDÁCTICA (INFO - AZUL)
         st.info(f"""
         ### 💡 3. Guía Rápida para Decidir
         * **Criterio de Elección:** Busca siempre entidades cuyas tasas estén **por debajo de {tasa_promedio_mkt:.2f}% E.A.** (Promedio del Mercado).
