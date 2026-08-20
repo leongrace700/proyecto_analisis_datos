@@ -185,7 +185,6 @@ with tab_eda:
 with tab_dashboard:
     st.header("📊 Dashboard Financiero General")
     
-    df_curr = st.session_state.df_clean
     
     col1, col2, col3 = st.columns(3)
     if 'tasa_efectiva_promedio' in df_curr.columns:
