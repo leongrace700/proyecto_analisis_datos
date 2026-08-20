@@ -142,15 +142,15 @@ if 'df_clean' not in st.session_state:
     st.session_state.df_clean = load_default_data()
 
 # -----------------------------------------------------------------------------
-# INTERFAZ Y PESTAÑAS (ORDEN REORGANIZADO)
+# INTERFAZ Y PESTAÑAS
 # -----------------------------------------------------------------------------
 st.title("🏦 Monitor Financiero & Cotizador de Créditos")
 
-tab_eda, tab_dashboard, tab_simulador, tab_math = st.tabs([
+tab_eda, tab_dashboard, tab_simulador, tab_analysis = st.tabs([
     "🔍 1. Cargar & Explorar Datos",
     "📊 2. Dashboard de Tasas", 
     "🧮 3. Calculadora & Comparador", 
-    "📐 4. Análisis de Funciones Financieras"
+    "📈 4. Análisis & Interpretación de Opciones"
 ])
 
 # =============================================================================
@@ -316,28 +316,56 @@ with tab_simulador:
         st.plotly_chart(fig_bar, use_container_width=True)
 
 # =============================================================================
-# PESTAÑA 4: ANÁLISIS DE FUNCIONES FINANCIERAS (CONCEPTUAL & DESCRIPTIVO)
+# PESTAÑA 4: ANÁLISIS E INTERPRETACIONAL DE DATOS DEL DASHBOARD
 # =============================================================================
-with tab_math:
-    st.header("📐 Análisis y Lógica de las Funciones Financieras")
-    st.markdown("""
-    En el sistema bancario colombiano, la evaluación y cotización de créditos se rige bajo normativas financieras estrictas definidas por la Superintendencia Financiera. A continuación se analiza la dinámica operativa de los dos cálculos principales ejecutados por el simulador:
-    """)
+with tab_analysis:
+    st.header("📈 Análisis Interpretativo y Diagnóstico del Mercado")
+    st.markdown("Esta sección consolida las métricas del **Dashboard (Pestaña 2)** para evaluar el comportamiento del mercado e identificar la mejor opción de financiamiento:")
     
-    st.markdown("### 1. Conversión de Tasas: Efectiva Anual (E.A.) a Efectiva Mensual (E.M.)")
-    st.markdown("""
-    * **Propósito en la App:** Las entidades bancarias reportan sus tasas en términos de Tasa Efectiva Anual (E.A.), pero los cobros y facturaciones se realizan mensualmente. Esta función realiza la conversión periódica equivalente.
-    * **Interés Compuesto Exponencial:** A diferencia del interés simple (donde la tasa anual se dividiría linealmente entre 12), el sistema financiero colombiano exige una equivalencia exponencial. Esto toma en cuenta la capitalización de intereses mes a mes.
-    * **Impacto Financiero:** La tasa mensual resultante asegura que al cabo de 12 meses el costo real coincida exactamente con la tasa E.A. publicada por el banco, protegiendo al usuario de sobrecostos no calculados.
-    """)
+    df_curr = st.session_state.df_clean
     
-    st.markdown("---")
-    
-    st.markdown("### 2. Sistema de Amortización Francés (Cuota Fija Mensual)")
-    st.markdown("""
-    * **Propósito en la App:** Modela la cuota que pagará el usuario mes a mes durante la vigencia del crédito solicitado.
-    * **Composición de la Cuota:** Aunque el valor pagado por el usuario es exacto y constante todos los meses, su estructura interna cambia con el tiempo:
-        * **En los primeros meses:** La mayor parte del pago se destina a cubrir los **intereses generados**, abonando una fracción menor al capital.
-        * **En los últimos meses:** A medida que la deuda disminuye, el costo por intereses cae significativamente, permitiendo que la mayor parte de la cuota amortice el **capital principal**.
-    * **Relación Plazo - Interés Total:** A mayor plazo, el valor de la cuota mensual disminuye, facilitando la liquidez inmediata del deudor; sin embargo, el valor acumulado pagado por concepto de intereses aumenta exponencialmente.
-    """)
+    if df_curr.empty or 'tasa_efectiva_promedio' not in df_curr.columns or 'nombre_entidad' not in df_curr.columns:
+        st.warning("Se requieren datos válidos cargados para generar el análisis interpretativo.")
+    else:
+        # Procesamiento y cálculo de métricas para el análisis
+        df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio')
+        
+        mejor_banco = df_rank.iloc[0]
+        peor_banco = df_rank.iloc[-1]
+        tasa_promedio_mkt = df_rank['tasa_efectiva_promedio'].mean()
+        diferencial_tasas = peor_banco['tasa_efectiva_promedio'] - mejor_banco['tasa_efectiva_promedio']
+        
+        # 1. Visualización condensada del Dashboard
+        st.markdown("### 📊 Datos Consolidados del Mercado")
+        c1, c2 = st.columns([2, 1])
+        
+        with c1:
+            fig_rank_tab4 = px.bar(
+                df_rank,
+                x='tasa_efectiva_promedio',
+                y='nombre_entidad',
+                orientation='h',
+                title="Ranking Integrado de Tasas Efectivas Promedio (Pestaña 2)",
+                color='tasa_efectiva_promedio',
+                color_continuous_scale='Greens_r',
+                template='plotly_dark'
+            )
+            st.plotly_chart(fig_rank_tab4, use_container_width=True)
+            
+        with c2:
+            st.metric("Tasa Promedio Mercado", f"{tasa_promedio_mkt:.2f}% E.A.")
+            st.metric("🥇 Mejor Entidad (Menor Tasa)", f"{mejor_banco['nombre_entidad']}", f"{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
+            st.metric("🔻 Entidad con Mayor Tasa", f"{peor_banco['nombre_entidad']}", f"{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
+            st.metric("Brecha entre Bancos", f"{diferencial_tasas:.2f}% E.A.")
+
+        st.markdown("---")
+        
+        # 2. Análisis e Interpretación
+        st.markdown("### 🔍 Diagnóstico e Interpretación Financiera")
+        
+        st.markdown(f"""
+        * **Identificación de la Mejor Opción:** **{mejor_banco['nombre_entidad']}** es la opción más competitiva en el dataset actual con una tasa promedio del **{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.**, situándose **{(tasa_promedio_mkt - mejor_banco['tasa_efectiva_promedio']):.2f}%** por debajo del promedio global del mercado.
+        * **Evaluación del Costo Oportunidad (Brecha del Mercado):** La diferencia entre la entidad con la menor y la mayor tasa es de **{diferencial_tasas:.2f}% E.A.** Solicitar un crédito en la opción más costosa (**{peor_banco['nombre_entidad']}**) representa un sobrecosto significativo por intereses sobre el capital financiado.
+        * **Participación y Distribución por Modalidad:** Si se observan los volúmenes desembolsados del Dashboard, la mayor concentración del capital suele registrarse en modalidades de menor riesgo o mayor volumen (como Vivienda), lo que permite a las entidades ofrecer tasas más bajas en comparación con los créditos de Consumo.
+        * **Recomendación Estratégica:** Al cotizar en la **Pestaña 3**, la recomendación técnica es priorizar ofertas de **{mejor_banco['nombre_entidad']}** o entidades que mantengan sus tasas por debajo del promedio general de **{tasa_promedio_mkt:.2f}% E.A.**
+        """)
