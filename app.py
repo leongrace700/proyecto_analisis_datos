@@ -409,7 +409,7 @@ with tab_analysis:
                     yaxis=dict(autorange="reversed"),
                     font=dict(color="#212529")
                 )
-                st.plotly_chart(fig_rank_tab4, use_container_width=True)
+                st.plotly_chart(fig_rank_tab4, use_container_width=True, key="chart_rank_tab4")
                 
             with c2:
                 st.metric("Tasa Promedio Mercado", f"{tasa_promedio_mkt:.2f}% E.A.")
