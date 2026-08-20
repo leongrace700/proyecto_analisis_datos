@@ -143,10 +143,6 @@ def clean_data(df):
     return df
 
 
-
-if 'df_clean' not in st.session_state:
-    st.session_state.df_clean = load_default_data()
-
 # -----------------------------------------------------------------------------
 # INTERFAZ Y PESTAÑAS
 # -----------------------------------------------------------------------------
