@@ -76,7 +76,7 @@ def calcular_cuota_fija(monto, tasa_ea, plazo_meses):
 def clean_data(df):
     df = df.copy()
 
-    # Normalización de nombres de columnas
+    # 1. Normalización inicial de nombres de columnas
     df.columns = (
         df.columns.str.strip()
         .str.lower()
@@ -89,53 +89,66 @@ def clean_data(df):
         .str.replace("ñ", "n")
     )
 
-    # Mapeo flexible para adaptarse a cualquier estructura de CSV cargada
+    # 2. Mapeo específico ajustado a los encabezados de Datos Abiertos Colombia / Socrata
     col_map = {
+        # Entidad
         'nombre_de_la_entidad': 'nombre_entidad',
         'entidad': 'nombre_entidad',
         'banco': 'nombre_entidad',
+        
+        # Tipo / Modalidad de Crédito (Soporta variaciones de tilde y guiones)
         'tipo_de_credito': 'tipo_credito',
+        'tipo_de_cr_dito': 'tipo_credito',
         'modalidad': 'tipo_credito',
+        'linea_de_credito': 'tipo_credito',
+        'producto': 'tipo_credito',
+        
+        # Tasa de Interés
         'tasa_efectiva_promedio_ponderada': 'tasa_efectiva_promedio',
+        'tasa_efectiva_promedio': 'tasa_efectiva_promedio',
         'tasa_ea': 'tasa_efectiva_promedio',
         'tasa': 'tasa_efectiva_promedio',
+        
+        # Montos (Soporta plurales de Datos Abiertos)
+        'montos_desembolsados': 'monto_desembolsado',
         'monto_desembolsado': 'monto_desembolsado',
         'monto': 'monto_desembolsado',
+        
+        # Créditos
         'numero_de_creditos': 'numero_creditos',
         'creditos': 'numero_creditos'
     }
+    
     df = df.rename(columns=col_map)
 
-    # Conversión de Fechas
-    fecha_cols = [c for c in df.columns if 'fecha' in c or 'created' in c or 'updated' in c]
-    for col in fecha_cols:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
+    # 3. Asegurar columnas esenciales si no venían en el CSV
+    if 'tipo_credito' not in df.columns:
+        df['tipo_credito'] = 'General'
+    else:
+        df['tipo_credito'] = df['tipo_credito'].fillna('General')
 
-    # Conversión Numérica
+    if 'nombre_entidad' not in df.columns:
+        df['nombre_entidad'] = 'Desconocido'
+    else:
+        df['nombre_entidad'] = df['nombre_entidad'].fillna('Desconocido')
+
+    # 4. Conversión Numérica
     num_cols = ['tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos']
     for col in num_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    df = df.drop_duplicates()
-
-    # Filtros y limpiezas prudenciales
+    # 5. Filtros de calidad
     if 'tasa_efectiva_promedio' in df.columns:
         df = df[df['tasa_efectiva_promedio'] > 0]
         df = df[(df['tasa_efectiva_promedio'] >= 1.0) & (df['tasa_efectiva_promedio'] <= 100.0)]
-        
+
     if 'monto_desembolsado' in df.columns:
         df['monto_desembolsado'] = df['monto_desembolsado'].fillna(0)
 
-    if 'tipo_credito' in df.columns:
-        df['tipo_credito'] = df['tipo_credito'].fillna('General')
+    return df.drop_duplicates()
 
-    if 'nombre_entidad' in df.columns:
-        df['nombre_entidad'] = df['nombre_entidad'].fillna('Desconocido')
-
-    return df
-
-# Inicialización sin datos por defecto
+# Inicialización sin data por defecto (Data 100% controlada por el usuario)
 if 'df_clean' not in st.session_state:
     st.session_state.df_clean = None
 
@@ -152,32 +165,37 @@ tab_eda, tab_dashboard, tab_simulador, tab_analysis = st.tabs([
 ])
 
 # =============================================================================
-# PESTAÑA 1: CARGAR Y EXPLORAR DATOS (ÚNICA FUENTE DE DATOS)
+# PESTAÑA 1: CARGAR Y EXPLORAR DATOS
 # =============================================================================
 with tab_eda:
     st.header("🔍 Carga de Archivo de Datos")
-    st.markdown("Carga tu archivo `.csv` o `.xlsx` para alimentar la información de toda la plataforma:")
+    st.markdown("Sube tu archivo `.csv` o `.xlsx` para mapear y procesar las variables automáticamente:")
     
-    uploaded_file = st.file_uploader("Seleccionar archivo CSV o Excel", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("Seleccionar archivo de datos", type=["csv", "xlsx"])
     
     if uploaded_file is not None:
         try:
             if uploaded_file.name.endswith('.csv'):
-                df_custom = pd.read_csv(uploaded_file)
+                df_raw = pd.read_csv(uploaded_file)
             else:
-                df_custom = pd.read_excel(uploaded_file)
+                df_raw = pd.read_excel(uploaded_file)
             
-            st.session_state.df_clean = clean_data(df_custom)
-            st.success("✅ ¡Dataset cargado y procesado con éxito! Todas las pestañas están actualizadas con tu información.")
+            st.session_state.df_clean = clean_data(df_raw)
+            st.success("✅ ¡Archivo cargado y columnas transformadas correctamente!")
         except Exception as e:
             st.error(f"Error al procesar el archivo: {e}")
 
     st.markdown("---")
-    st.markdown("### 📋 Vista Previa de la Data Cargada")
+    
     if st.session_state.df_clean is not None:
+        st.markdown("### 📋 Vista Previa de la Data Transformada")
+        
+        cols_mapeadas = [c for c in ['nombre_entidad', 'tipo_credito', 'tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos'] if c in st.session_state.df_clean.columns]
+        st.info(f"Campos clave detectados y normalizados: **{', '.join(cols_mapeadas)}**")
+        
         st.dataframe(st.session_state.df_clean, use_container_width=True)
     else:
-        st.info("👆 Por favor sube un archivo en la sección superior para previsualizar la información.")
+        st.info("👆 Por favor sube un archivo CSV para generar el mapeo y habilitar las demás pestañas.")
 
 # =============================================================================
 # PESTAÑA 2: DASHBOARD DE TASAS Y MERCADO
@@ -329,7 +347,7 @@ with tab_simulador:
             st.plotly_chart(fig_bar, use_container_width=True)
 
 # =============================================================================
-# PESTAÑA 4: ANÁLISIS E INTERPRETACIÓN DIDÁCTICA
+# PESTAÑA 4: ANÁLISIS E INTERPRETACIONAL DIDÁCTICO
 # =============================================================================
 with tab_analysis:
     st.header("📈 Diagnóstico e Interpretación Financiera")
