@@ -178,7 +178,6 @@ with tab_eda:
 
     st.markdown("---")
     st.markdown("### 📋 Vista Previa del Dataset Activo")
-    st.dataframe(st.session_state.df_clean, use_container_width=True)
 
 # =============================================================================
 # PESTAÑA 2: DASHBOARD DE TASAS Y MERCADO
