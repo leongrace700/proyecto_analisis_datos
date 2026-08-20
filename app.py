@@ -339,25 +339,28 @@ with tab_simulador:
         st.plotly_chart(fig_bar, use_container_width=True)
 
 # =============================================================================
-# PESTAÑA 4: ANÁLISIS E INTERPRETACIONAL DE DATOS DEL DASHBOARD
+# PESTAÑA 4: ANÁLISIS E INTERPRETACIÓN DE OPCIONES (VERSIÓN DIDÁCTICA)
 # =============================================================================
 with tab_analysis:
-    st.header("📈 Análisis Interpretativo y Diagnóstico del Mercado")
-    st.markdown("Esta sección consolida las métricas del **Dashboard (Pestaña 2)** para evaluar el comportamiento del mercado e identificar la mejor opción de financiamiento:")
+    st.header("📈 Diagnóstico e Interpretación Financiera")
+    st.markdown("Analizamos los datos cargados en la **Pestaña #2 (Dashboard)** para entregarte un diagnóstico claro y dinámico de la mejor opción del mercado.")
     
     df_curr = st.session_state.df_clean
     
     if df_curr.empty or 'tasa_efectiva_promedio' not in df_curr.columns or 'nombre_entidad' not in df_curr.columns:
         st.warning("Se requieren datos válidos cargados para generar el análisis interpretativo.")
     else:
+        # 1. Preparación de datos clave
         df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio')
         
         mejor_banco = df_rank.iloc[0]
         peor_banco = df_rank.iloc[-1]
         tasa_promedio_mkt = df_rank['tasa_efectiva_promedio'].mean()
         diferencial_tasas = peor_banco['tasa_efectiva_promedio'] - mejor_banco['tasa_efectiva_promedio']
-        
-        st.markdown("### 📊 Datos Consolidados del Mercado")
+        ahorro_vs_promedio = tasa_promedio_mkt - mejor_banco['tasa_efectiva_promedio']
+
+        # 2. Resumen Visual (Dashboard Consolidado de la Pestaña 2)
+        st.markdown("### 📊 Consolidated Dashboard Summary")
         c1, c2 = st.columns([2, 1])
         
         with c1:
@@ -366,7 +369,7 @@ with tab_analysis:
                 x='tasa_efectiva_promedio',
                 y='nombre_entidad',
                 orientation='h',
-                title="Ranking Integrado de Tasas Efectivas Promedio",
+                title="Ranking de Tasas Efectivas Promedio (Pestaña 2)",
                 color='tasa_efectiva_promedio',
                 color_continuous_scale='Greens_r',
                 template='plotly_white'
@@ -376,17 +379,32 @@ with tab_analysis:
             
         with c2:
             st.metric("Tasa Promedio Mercado", f"{tasa_promedio_mkt:.2f}% E.A.")
-            st.metric("🥇 Mejor Entidad (Menor Tasa)", f"{mejor_banco['nombre_entidad']}", f"{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
-            st.metric("🔻 Entidad con Mayor Tasa", f"{peor_banco['nombre_entidad']}", f"{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
-            st.metric("Brecha entre Bancos", f"{diferencial_tasas:.2f}% E.A.")
+            st.metric("🥇 Mejor Entidad", f"{mejor_banco['nombre_entidad']}", f"{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
+            st.metric("🔻 Entidad Más Costosa", f"{peor_banco['nombre_entidad']}", f"{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
+            st.metric("Spread de Mercado", f"{diferencial_tasas:.2f}% E.A.")
 
         st.markdown("---")
         
-        st.markdown("### 🔍 Diagnóstico e Interpretación Financiera")
-        
-        st.markdown(f"""
-        * **Identificación de la Mejor Opción:** **{mejor_banco['nombre_entidad']}** es la opción más competitiva en el dataset actual con una tasa promedio del **{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.**, situándose **{(tasa_promedio_mkt - mejor_banco['tasa_efectiva_promedio']):.2f}%** por debajo del promedio global del mercado.
-        * **Evaluación del Costo Oportunidad:** La brecha entre la entidad con menor y mayor tasa es de **{diferencial_tasas:.2f}% E.A.** Elegir la entidad más costosa (**{peor_banco['nombre_entidad']}**) representa un costo financiero innecesario.
-        * **Distribución por Modalidad:** Las modalidades con garantíás o menor riesgo (como Vivienda) tienden a concentrar tasas más bajas en comparación con créditos de Consumo sin garantía.
-        * **Recomendación Estratégica:** Se sugiere cotizar en la **Pestaña 3** priorizando ofertas de **{mejor_banco['nombre_entidad']}** o instituciones que operen por debajo de la media de mercado (**{tasa_promedio_mkt:.2f}% E.A.**).
+        # 3. Módulos Didácticos de Interpretación
+        st.markdown("### 🧠 ¿Qué significan estos números para tu dinero?")
+
+        # TARJETA 1: LA MEJOR OPCIÓN (ÉXITO - VERDE)
+        st.success(f"""
+        ### 🏆 1. La Opción Ganadora: **{mejor_banco['nombre_entidad']}**
+        * **Tasa Ofrecida:** **{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.**
+        * **Ventaja Clave:** Se ubica **{ahorro_vs_promedio:.2f}% por debajo** del promedio del mercado. Es la alternativa que menor costo financiero generará sobre tu capital desembolsado.
+        """)
+
+        # TARJETA 2: ALERTA DE RIESGO / SOBRECOSTO (ADVERTENCIA - AMARILLO/ROJO)
+        st.warning(f"""
+        ### ⚠️ 2. La Opción Menos Conveniente: **{peor_banco['nombre_entidad']}**
+        * **Tasa Ofrecida:** **{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.**
+        * **Impacto Financiero:** Hay una brecha de **{diferencial_tasas:.2f}%** entre la mejor y la peor opción. Tomar tu crédito aquí implica pagar intereses considerablemente más altos por exactamente la misma suma prestada.
+        """)
+
+        # TARJETA 3: GUÍA DIDÁCTICA (INFO - AZUL)
+        st.info(f"""
+        ### 💡 3. Guía Rápida para Decidir
+        * **Criterio de Elección:** Busca siempre entidades cuyas tasas estén **por debajo de {tasa_promedio_mkt:.2f}% E.A.** (Promedio del Mercado).
+        * **Siguiente Paso:** Ve a la **Pestaña #3 (Calculadora)**, ingresa el monto exacto que necesitas y valida cuánto te ahorras en la cuota mensual eligiendo a **{mejor_banco['nombre_entidad']}**.
         """)
