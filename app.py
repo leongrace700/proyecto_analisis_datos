@@ -233,21 +233,29 @@ with tab_dashboard:
             col3.metric("Créditos Registrados", f"{df_curr['numero_creditos'].sum():,.0f}")
         
         st.markdown("---")
-        
-      c_chart1, c_chart2 = st.columns(2)                
-        with c_chart2:
-            if 'tipo_credito' in df_curr.columns and 'monto_desembolsado' in df_curr.columns:
-                fig_pie = px.pie(
-                    df_curr,
-                    names='tipo_credito',
-                    values='monto_desembolsado',
-                    hole=0.4,
-                    title="Distribución del Crédito por Tipo",
-                    color_discrete_sequence=px.colors.qualitative.Pastel,
+        c_chart1, c_chart2 = st.columns(2)
+        with c_chart1:
+            if 'tasa_efectiva_promedio' in df_curr.columns and 'nombre_entidad' in df_curr.columns:
+                # Ordenamiento de menor a mayor tasa (Ascendente)
+                df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio', ascending=True)
+                
+                fig_rank = px.bar(
+                    df_rank,
+                    x='tasa_efectiva_promedio',
+                    y='nombre_entidad',
+                    orientation='h',
+                    title="Ranking de Tasas Efectivas Promedio (Menor a Mayor)",
+                    color='tasa_efectiva_promedio',
+                    color_continuous_scale='Blues_r',  # Azul invertido para resaltar en oscuro las tasas más favorables
                     template='plotly_white'
                 )
-                fig_pie.update_layout(font=dict(color="#212529"))
-                st.plotly_chart(fig_pie, use_container_width=True)
+                
+                # Mantiene el orden ascendente de arriba hacia abajo
+                fig_rank.update_layout(
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(color="#212529")
+                )
+                st.plotly_chart(fig_rank, use_container_width=True)
 
 # =============================================================================
 # PESTAÑA 3: CALCULADORA Y COMPARADOR DE CRÉDITOS
