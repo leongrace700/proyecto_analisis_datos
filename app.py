@@ -142,18 +142,7 @@ def clean_data(df):
 
     return df
 
-# Dataset base por defecto
-@st.cache_data
-def load_default_data():
-    raw_data = [
-        {"nombre_entidad": "BANCO DE BOGOTA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 18.50, "monto_desembolsado": 4500000000, "numero_creditos": 1200},
-        {"nombre_entidad": "BANCOLOMBIA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 20.10, "monto_desembolsado": 8900000000, "numero_creditos": 3100},
-        {"nombre_entidad": "DAVIVIENDA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 22.30, "monto_desembolsado": 6200000000, "numero_creditos": 2100},
-        {"nombre_entidad": "BBVA COLOMBIA", "tipo_credito": "Consumo", "tasa_efectiva_promedio": 19.80, "monto_desembolsado": 3800000000, "numero_creditos": 980},
-        {"nombre_entidad": "BANCO DE BOGOTA", "tipo_credito": "Vivienda", "tasa_efectiva_promedio": 14.20, "monto_desembolsado": 12000000000, "numero_creditos": 300},
-        {"nombre_entidad": "BANCOLOMBIA", "tipo_credito": "Vivienda", "tasa_efectiva_promedio": 13.80, "monto_desembolsado": 18000000000, "numero_creditos": 520},
-    ]
-    return clean_data(pd.DataFrame(raw_data))
+
 
 if 'df_clean' not in st.session_state:
     st.session_state.df_clean = load_default_data()
