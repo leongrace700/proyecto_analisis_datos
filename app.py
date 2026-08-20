@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y TEMA OSCURO
 # -----------------------------------------------------------------------------
 st.set_page_config(
@@ -33,7 +34,7 @@ st.markdown("""
         color: #00FFB2 !important;
     }
     </style>
-""", unsafe_allow_html_gradient=True)
+""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # FUNCIONES AUXILIARES DE CÁLCULO FINANCIERO (SISTEMA COLOMBIANO)
