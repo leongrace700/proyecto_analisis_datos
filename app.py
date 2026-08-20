@@ -440,17 +440,17 @@ with tab_analysis:
             """)
 
 # =============================================================================
-# PESTAÑA 5: PREDICCIÓN CON MACHINE LEARNING (RANDOM FOREST)
+# PESTAÑA 5: PREDICCIÓN CON MACHINE LEARNING (OPTIMIZADOR AUTOMÁTICO)
 # =============================================================================
 with tab_ml:
-    st.header("🤖 Predicción Predictiva de Tasas (Machine Learning)")
+    st.header("🤖 Predicción Predictiva & Recomendador Automático de Tasas")
     
     if st.session_state.df_clean is None:
         st.warning("⚠️ No se ha cargado ninguna data. Ve a la **Pestaña #1** y sube tu archivo CSV para entrenar el modelo de Machine Learning.")
     else:
         st.markdown("""
-        Esta pestaña utiliza un modelo de **Random Forest Regressor** entrenado dinámicamente con los datos que cargaste. 
-        Permite predecir cuál sería la **tasa de interés estimada (E.A.)** para una operación en función del tipo de crédito, entidad y monto desembolsado.
+        Ingresa el monto y el tipo de crédito deseado. El modelo predictivo de **Random Forest** evaluará internamente 
+        todas las entidades financieras disponibles para determinar **cuál banco te ofrece la tasa estimada más baja** y conveniente.
         """)
         
         df_ml = st.session_state.df_clean.copy()
@@ -461,7 +461,8 @@ with tab_ml:
         else:
             # Preprocesamiento para ML
             feature_cols = ['monto_desembolsado', 'tipo_credito']
-            if 'nombre_entidad' in df_ml.columns:
+            has_banco = 'nombre_entidad' in df_ml.columns
+            if has_banco:
                 feature_cols.append('nombre_entidad')
                 
             df_model_data = df_ml[feature_cols + ['tasa_efectiva_promedio']].dropna()
@@ -483,52 +484,102 @@ with tab_ml:
                 st.success("✅ Modelo entrenado exitosamente.")
                 
                 st.markdown("---")
-                st.subheader("🔮 Cotizador Predictivo de Tasa")
+                st.subheader("🔮 Cotizador & Buscador de la Mejor Entidad")
                 
                 c_ml1, c_ml2, c_ml3 = st.columns(3)
                 
                 with c_ml1:
                     monto_pred = st.number_input(
-                        "Monto a evaluar ($ COP):", 
+                        "Monto a solicitar ($ COP):", 
                         min_value=1000000, 
                         max_value=500000000, 
                         value=20000000, 
                         step=1000000,
-                        key="ml_monto"
+                        key="ml_monto_auto"
                     )
                     
                 with c_ml2:
                     tipos_opt = list(df_ml['tipo_credito'].unique())
-                    tipo_pred = st.selectbox("Tipo de Crédito:", tipos_opt, key="ml_tipo")
+                    tipo_pred = st.selectbox("Tipo de Crédito:", tipos_opt, key="ml_tipo_auto")
                     
                 with c_ml3:
-                    if 'nombre_entidad' in df_ml.columns:
-                        bancos_opt = list(df_ml['nombre_entidad'].unique())
-                        banco_pred = st.selectbox("Entidad Financiera:", bancos_opt, key="ml_banco")
-                    else:
-                        banco_pred = None
+                    plazo_pred = st.slider(
+                        "Plazo estimado (Meses):", 
+                        min_value=6, 
+                        max_value=120, 
+                        value=24, 
+                        step=6,
+                        key="ml_plazo_auto"
+                    )
                         
-                if st.button("🚀 Predecir Tasa Estimada"):
-                    # Construcción de vector de entrada en cero
-                    input_row = pd.DataFrame(0, index=[0], columns=X.columns)
+                if st.button("🚀 Encontrar el Mejor Banco y Predecir Tasa", key="btn_ml_predict"):
+                    list_bancos = df_ml['nombre_entidad'].unique() if has_banco else ['Mercado General']
                     
-                    if 'monto_desembolsado' in input_row.columns:
-                        input_row['monto_desembolsado'] = monto_pred
+                    resultados_pred = []
+                    
+                    for banco in list_bancos:
+                        # Vector de entrada en cero
+                        input_row = pd.DataFrame(0, index=[0], columns=X.columns)
                         
-                    col_tipo = f"tipo_credito_{tipo_pred}"
-                    if col_tipo in input_row.columns:
-                        input_row[col_tipo] = 1
-                        
-                    if banco_pred:
-                        col_banco = f"nombre_entidad_{banco_pred}"
-                        if col_banco in input_row.columns:
-                            input_row[col_banco] = 1
+                        if 'monto_desembolsado' in input_row.columns:
+                            input_row['monto_desembolsado'] = monto_pred
                             
-                    tasa_predicha = rf_model.predict(input_row)[0]
-                    cuota_pred, int_pred, total_pred = calcular_cuota_fija(monto_pred, tasa_predicha, 24)
+                        col_tipo = f"tipo_credito_{tipo_pred}"
+                        if col_tipo in input_row.columns:
+                            input_row[col_tipo] = 1
+                            
+                        if has_banco:
+                            col_banco = f"nombre_entidad_{banco}"
+                            if col_banco in input_row.columns:
+                                input_row[col_banco] = 1
+                                
+                        tasa_est = rf_model.predict(input_row)[0]
+                        cuota_est, int_est, total_est = calcular_cuota_fija(monto_pred, tasa_est, plazo_pred)
+                        
+                        resultados_pred.append({
+                            'Entidad': banco,
+                            'Tasa Estimada (E.A.)': tasa_est,
+                            'Cuota Mensual ($)': cuota_est,
+                            'Total Intereses ($)': int_est
+                        })
                     
-                    st.markdown("### 📊 Resultado de la Predicción")
-                    p1, p2, p3 = st.columns(3)
-                    p1.metric("Tasa Estimada (E.A.)", f"{tasa_predicha:.2f}%")
-                    p2.metric("Tasa Mensual (E.M.)", f"{ea_to_em(tasa_predicha)*100:.2f}%")
-                    p3.metric("Cuota Estimada (24m)", f"${cuota_pred:,.0f}")
+                    # Convertir a DataFrame y ordenar de MENOR a MAYOR tasa
+                    df_preds = pd.DataFrame(resultados_pred).sort_values(by='Tasa Estimada (E.A.)', ascending=True)
+                    mejor_opcion = df_preds.iloc[0]
+                    
+                    st.markdown("---")
+                    st.success(f"### 🏆 Banco Sugerido: **{mejor_opcion['Entidad']}**")
+                    
+                    p1, p2, p3, p4 = st.columns(4)
+                    p1.metric("🥇 Entidad Recomendada", mejor_opcion['Entidad'])
+                    p2.metric("📉 Tasa Estimada (E.A.)", f"{mejor_opcion['Tasa Estimada (E.A.)']:.2f}%")
+                    p3.metric("💳 Cuota Mensual", f"${mejor_opcion['Cuota Mensual ($)']:,.0f}")
+                    p4.metric("💰 Intereses Totales", f"${mejor_opcion['Total Intereses ($)']:,.0f}")
+                    
+                    st.markdown("### 📊 Comparativa de Tasas Estimadas por Entidad")
+                    
+                    # Gráfico ordenado de menor a mayor con azul predeterminado y KEY única
+                    fig_ml_rank = px.bar(
+                        df_preds,
+                        x='Tasa Estimada (E.A.)',
+                        y='Entidad',
+                        orientation='h',
+                        title=f"Ranking Predictivo para Crédito de {tipo_pred} por ${monto_pred:,.0f}",
+                        color='Tasa Estimada (E.A.)',
+                        color_continuous_scale='Blues_r',
+                        template='plotly_white',
+                        text_auto='.2f'
+                    )
+                    fig_ml_rank.update_layout(
+                        yaxis=dict(autorange="reversed"),
+                        font=dict(color="#212529")
+                    )
+                    st.plotly_chart(fig_ml_rank, use_container_width=True, key="chart_ml_rank_auto")
+                    
+                    # Tabla formateada
+                    df_preds_view = df_preds.copy()
+                    df_preds_view['Tasa Estimada (E.A.)'] = df_preds_view['Tasa Estimada (E.A.)'].apply(lambda x: f"{x:.2f}%")
+                    df_preds_view['Cuota Mensual ($)'] = df_preds_view['Cuota Mensual ($)'].apply(lambda x: f"${x:,.0f}")
+                    df_preds_view['Total Intereses ($)'] = df_preds_view['Total Intereses ($)'].apply(lambda x: f"${x:,.0f}")
+                    
+                    st.dataframe(df_preds_view, use_container_width=True)
