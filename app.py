@@ -401,7 +401,7 @@ with tab_analysis:
                     x='tasa_efectiva_promedio',
                     y='nombre_entidad',
                     orientation='h',
-                    title="Ranking de Tasas Efectivas Promedio (Pestaña 2)",
+                    title="Ranking de Tasas Efectivas Promedio",
                     color='tasa_efectiva_promedio',
                     color_continuous_scale='Greens_r',
                     template='plotly_white'
