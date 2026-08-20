@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 
 # -----------------------------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y TEMA OSCURO
+# CONFIGURACIÓN DE PÁGINA Y TEMA CLARO / ELEGANTE
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Monitor Financiero & Cotizador de Créditos Colombia",
@@ -13,24 +13,41 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilo CSS personalizado para tema oscuro
+# Estilo CSS personalizado en tonos claros con alta legibilidad
 st.markdown("""
     <style>
+    /* Fondo principal y tipografía general */
     .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
+        background-color: #F8F9FA;
+        color: #212529;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
+    
+    /* Contenedores y Tarjetas */
+    div[data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+        font-weight: 700;
+        color: #0F52BA;
+    }
+    
+    /* Estilo de Pestañas */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 12px;
+        background-color: #E9ECEF;
+        padding: 8px;
+        border-radius: 8px;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: #1E222A;
-        border-radius: 4px;
-        color: #E0E0E0;
+        background-color: transparent;
+        border-radius: 6px;
+        color: #495057;
+        font-weight: 600;
+        padding: 8px 16px;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #262730 !important;
-        color: #00FFB2 !important;
+        background-color: #FFFFFF !important;
+        color: #0F52BA !important;
+        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -207,8 +224,10 @@ with tab_dashboard:
                 orientation='h',
                 title="Ranking de Tasas Efectivas Promedio",
                 color='tasa_efectiva_promedio',
-                template='plotly_dark'
+                color_continuous_scale='Blues_r',
+                template='plotly_white'
             )
+            fig_rank.update_layout(font=dict(color="#212529"))
             st.plotly_chart(fig_rank, use_container_width=True)
             
     with c_chart2:
@@ -219,8 +238,10 @@ with tab_dashboard:
                 values='monto_desembolsado',
                 hole=0.4,
                 title="Distribución del Crédito por Tipo",
-                template='plotly_dark'
+                color_discrete_sequence=px.colors.qualitative.Pastel,
+                template='plotly_white'
             )
+            fig_pie.update_layout(font=dict(color="#212529"))
             st.plotly_chart(fig_pie, use_container_width=True)
 
 # =============================================================================
@@ -311,8 +332,10 @@ with tab_simulador:
             color='Tasa E.A. (%)',
             title=f"Comparativa de Cuotas Mensuales para ${monto_solicitado:,.0f} a {plazo_meses} meses",
             text_auto=',.0f',
-            template='plotly_dark'
+            color_continuous_scale='Teal_r',
+            template='plotly_white'
         )
+        fig_bar.update_layout(font=dict(color="#212529"))
         st.plotly_chart(fig_bar, use_container_width=True)
 
 # =============================================================================
@@ -327,7 +350,6 @@ with tab_analysis:
     if df_curr.empty or 'tasa_efectiva_promedio' not in df_curr.columns or 'nombre_entidad' not in df_curr.columns:
         st.warning("Se requieren datos válidos cargados para generar el análisis interpretativo.")
     else:
-        # Procesamiento y cálculo de métricas para el análisis
         df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio')
         
         mejor_banco = df_rank.iloc[0]
@@ -335,7 +357,6 @@ with tab_analysis:
         tasa_promedio_mkt = df_rank['tasa_efectiva_promedio'].mean()
         diferencial_tasas = peor_banco['tasa_efectiva_promedio'] - mejor_banco['tasa_efectiva_promedio']
         
-        # 1. Visualización condensada del Dashboard
         st.markdown("### 📊 Datos Consolidados del Mercado")
         c1, c2 = st.columns([2, 1])
         
@@ -345,11 +366,12 @@ with tab_analysis:
                 x='tasa_efectiva_promedio',
                 y='nombre_entidad',
                 orientation='h',
-                title="Ranking Integrado de Tasas Efectivas Promedio (Pestaña 2)",
+                title="Ranking Integrado de Tasas Efectivas Promedio",
                 color='tasa_efectiva_promedio',
                 color_continuous_scale='Greens_r',
-                template='plotly_dark'
+                template='plotly_white'
             )
+            fig_rank_tab4.update_layout(font=dict(color="#212529"))
             st.plotly_chart(fig_rank_tab4, use_container_width=True)
             
         with c2:
@@ -360,12 +382,11 @@ with tab_analysis:
 
         st.markdown("---")
         
-        # 2. Análisis e Interpretación
         st.markdown("### 🔍 Diagnóstico e Interpretación Financiera")
         
         st.markdown(f"""
         * **Identificación de la Mejor Opción:** **{mejor_banco['nombre_entidad']}** es la opción más competitiva en el dataset actual con una tasa promedio del **{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.**, situándose **{(tasa_promedio_mkt - mejor_banco['tasa_efectiva_promedio']):.2f}%** por debajo del promedio global del mercado.
-        * **Evaluación del Costo Oportunidad (Brecha del Mercado):** La diferencia entre la entidad con la menor y la mayor tasa es de **{diferencial_tasas:.2f}% E.A.** Solicitar un crédito en la opción más costosa (**{peor_banco['nombre_entidad']}**) representa un sobrecosto significativo por intereses sobre el capital financiado.
-        * **Participación y Distribución por Modalidad:** Si se observan los volúmenes desembolsados del Dashboard, la mayor concentración del capital suele registrarse en modalidades de menor riesgo o mayor volumen (como Vivienda), lo que permite a las entidades ofrecer tasas más bajas en comparación con los créditos de Consumo.
-        * **Recomendación Estratégica:** Al cotizar en la **Pestaña 3**, la recomendación técnica es priorizar ofertas de **{mejor_banco['nombre_entidad']}** o entidades que mantengan sus tasas por debajo del promedio general de **{tasa_promedio_mkt:.2f}% E.A.**
+        * **Evaluación del Costo Oportunidad:** La brecha entre la entidad con menor y mayor tasa es de **{diferencial_tasas:.2f}% E.A.** Elegir la entidad más costosa (**{peor_banco['nombre_entidad']}**) representa un costo financiero innecesario.
+        * **Distribución por Modalidad:** Las modalidades con garantíás o menor riesgo (como Vivienda) tienden a concentrar tasas más bajas en comparación con créditos de Consumo sin garantía.
+        * **Recomendación Estratégica:** Se sugiere cotizar en la **Pestaña 3** priorizando ofertas de **{mejor_banco['nombre_entidad']}** o instituciones que operen por debajo de la media de mercado (**{tasa_promedio_mkt:.2f}% E.A.**).
         """)
