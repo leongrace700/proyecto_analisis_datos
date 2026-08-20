@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+from sklearn.ensemble import RandomForestRegressor
 
 # -----------------------------------------------------------------------------
 # CONFIGURACIÓN DE PÁGINA Y TEMA CLARO
@@ -89,7 +90,7 @@ def clean_data(df):
         .str.replace("ñ", "n")
     )
 
-  # 2. Mapeo específico ajustado a los encabezados de Datos Abiertos Colombia / Socrata
+    # 2. Mapeo específico ajustado a los encabezados de Datos Abiertos Colombia / Socrata
     col_map = {
         # Entidad
         'nombre_de_la_entidad': 'nombre_entidad',
@@ -101,6 +102,7 @@ def clean_data(df):
         'tipo_de_cr_dito': 'tipo_credito',
         'modalidad': 'tipo_credito',
         'linea_de_credito': 'tipo_credito',
+        'producto': 'tipo_credito',
         
         # Tasa de Interés
         'tasa_efectiva_promedio_ponderada': 'tasa_efectiva_promedio',
@@ -117,22 +119,19 @@ def clean_data(df):
         'numero_de_creditos': 'numero_creditos',
         'creditos': 'numero_creditos',
 
-        # --- NUEVOS ENCABEZADOS AÑADIDOS ---
+        # Encabezados de Datos Abiertos
         'tipo_de_garantia': 'tipo_garantia',
-        'tipo_de_garant_a': 'tipo_garantia',       # Formato CSV Datos Abiertos
+        'tipo_de_garant_a': 'tipo_garantia',
         'garantia': 'tipo_garantia',
 
         'producto_de_credito': 'producto_credito',
-        'producto_de_cr_dito': 'producto_credito',  # Formato CSV Datos Abiertos
-        'producto': 'producto_credito',
+        'producto_de_cr_dito': 'producto_credito',
 
         'plazo_de_credito': 'plazo_credito',
-        'plazo_de_cr_dito': 'plazo_credito',        # Formato CSV Datos Abiertos
-        'plazo': 'plazo_credito',
+        'plazo_de_cr_dito': 'plazo_credito',
 
         'tamano_de_empresa': 'tamano_empresa',
-        'tama_o_de_empresa': 'tamano_empresa',      # Formato CSV Datos Abiertos
-        'tamano_empresa': 'tamano_empresa'
+        'tama_o_de_empresa': 'tamano_empresa'
     }
     
     df = df.rename(columns=col_map)
@@ -164,7 +163,7 @@ def clean_data(df):
 
     return df.drop_duplicates()
 
-# Inicialización sin data por defecto (Data 100% controlada por el usuario)
+# Inicialización del Session State
 if 'df_clean' not in st.session_state:
     st.session_state.df_clean = None
 
@@ -173,11 +172,12 @@ if 'df_clean' not in st.session_state:
 # -----------------------------------------------------------------------------
 st.title("🏦 Monitor Financiero & Cotizador de Créditos")
 
-tab_eda, tab_dashboard, tab_simulador, tab_analysis = st.tabs([
+tab_eda, tab_dashboard, tab_simulador, tab_analysis, tab_ml = st.tabs([
     "🔍 1. Cargar & Explorar Datos",
     "📊 2. Dashboard de Tasas", 
     "🧮 3. Calculadora & Comparador", 
-    "📈 4. Análisis & Interpretación de Opciones"
+    "📈 4. Análisis e Interpretación",
+    "🤖 5. Predicción con ML"
 ])
 
 # =============================================================================
@@ -206,7 +206,7 @@ with tab_eda:
     if st.session_state.df_clean is not None:
         st.markdown("### 📋 Vista Previa de la Data Transformada")
         
-        cols_mapeadas = [c for c in ['nombre_entidad', 'tipo_credito', 'tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos'] if c in st.session_state.df_clean.columns]
+        cols_mapeadas = [c for c in ['nombre_entidad', 'tipo_credito', 'tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos', 'tipo_garantia', 'producto_credito', 'plazo_credito', 'tamano_empresa'] if c in st.session_state.df_clean.columns]
         st.info(f"Campos clave detectados y normalizados: **{', '.join(cols_mapeadas)}**")
         
         st.dataframe(st.session_state.df_clean, use_container_width=True)
@@ -233,10 +233,10 @@ with tab_dashboard:
             col3.metric("Créditos Registrados", f"{df_curr['numero_creditos'].sum():,.0f}")
         
         st.markdown("---")
+        
         c_chart1, c_chart2 = st.columns(2)
         with c_chart1:
             if 'tasa_efectiva_promedio' in df_curr.columns and 'nombre_entidad' in df_curr.columns:
-                # Ordenamiento de menor a mayor tasa (Ascendente)
                 df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio', ascending=True)
                 
                 fig_rank = px.bar(
@@ -246,30 +246,28 @@ with tab_dashboard:
                     orientation='h',
                     title="Ranking de Tasas Efectivas Promedio (Menor a Mayor)",
                     color='tasa_efectiva_promedio',
-                    color_continuous_scale='Blues_r',  # Azul invertido para resaltar en oscuro las tasas más favorables
+                    color_continuous_scale='Blues_r',
                     template='plotly_white'
                 )
-                
-                # Mantiene el orden ascendente de arriba hacia abajo
                 fig_rank.update_layout(
                     yaxis=dict(autorange="reversed"),
                     font=dict(color="#212529")
                 )
                 st.plotly_chart(fig_rank, use_container_width=True)
-
-            with c_chart2:
-                if 'tipo_credito' in df_curr.columns and 'monto_desembolsado' in df_curr.columns:
-                    fig_pie = px.pie(
-                        df_curr,
-                        names='tipo_credito',
-                        values='monto_desembolsado',
-                        hole=0.4,
-                        title="Distribución del Crédito por Tipo",
-                        color_discrete_sequence=px.colors.qualitative.Pastel,
-                        template='plotly_white'
-                    )
-                    fig_pie.update_layout(font=dict(color="#212529"))
-                    st.plotly_chart(fig_pie, use_container_width=True)
+                
+        with c_chart2:
+            if 'tipo_credito' in df_curr.columns and 'monto_desembolsado' in df_curr.columns:
+                fig_pie = px.pie(
+                    df_curr,
+                    names='tipo_credito',
+                    values='monto_desembolsado',
+                    hole=0.4,
+                    title="Distribución del Crédito por Tipo",
+                    color_discrete_sequence=px.colors.qualitative.Pastel,
+                    template='plotly_white'
+                )
+                fig_pie.update_layout(font=dict(color="#212529"))
+                st.plotly_chart(fig_pie, use_container_width=True)
 
 # =============================================================================
 # PESTAÑA 3: CALCULADORA Y COMPARADOR DE CRÉDITOS
@@ -369,7 +367,7 @@ with tab_simulador:
             st.plotly_chart(fig_bar, use_container_width=True)
 
 # =============================================================================
-# PESTAÑA 4: ANÁLISIS E INTERPRETACIONAL DIDÁCTICO
+# PESTAÑA 4: ANÁLISIS E INTERPRETACIÓN
 # =============================================================================
 with tab_analysis:
     st.header("📈 Diagnóstico e Interpretación Financiera")
@@ -384,7 +382,8 @@ with tab_analysis:
         if df_curr.empty or 'tasa_efectiva_promedio' not in df_curr.columns or 'nombre_entidad' not in df_curr.columns:
             st.warning("Se requieren columnas válidas de 'entidad' y 'tasa' en el archivo cargado para generar el análisis interpretativo.")
         else:
-            df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio')
+            # Ordenamiento ascendente (de menor a mayor tasa)
+            df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio', ascending=True)
             
             mejor_banco = df_rank.iloc[0]
             peor_banco = df_rank.iloc[-1]
@@ -401,12 +400,15 @@ with tab_analysis:
                     x='tasa_efectiva_promedio',
                     y='nombre_entidad',
                     orientation='h',
-                    title="Ranking de Tasas Efectivas Promedio",
+                    title="Ranking de Tasas Efectivas Promedio (Menor a Mayor)",
                     color='tasa_efectiva_promedio',
-                    color_continuous_scale='Greens_r',
+                    color_continuous_scale='Blues_r',
                     template='plotly_white'
                 )
-                fig_rank_tab4.update_layout(font=dict(color="#212529"))
+                fig_rank_tab4.update_layout(
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(color="#212529")
+                )
                 st.plotly_chart(fig_rank_tab4, use_container_width=True)
                 
             with c2:
@@ -436,3 +438,97 @@ with tab_analysis:
             * **Criterio de Elección:** Busca siempre entidades cuyas tasas estén **por debajo de {tasa_promedio_mkt:.2f}% E.A.** (Promedio del Mercado).
             * **Siguiente Paso:** Ve a la **Pestaña #3 (Calculadora)**, ingresa el monto exacto que necesitas y valida cuánto te ahorras en la cuota mensual eligiendo a **{mejor_banco['nombre_entidad']}**.
             """)
+
+# =============================================================================
+# PESTAÑA 5: PREDICCIÓN CON MACHINE LEARNING (RANDOM FOREST)
+# =============================================================================
+with tab_ml:
+    st.header("🤖 Predicción Predictiva de Tasas (Machine Learning)")
+    
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ No se ha cargado ninguna data. Ve a la **Pestaña #1** y sube tu archivo CSV para entrenar el modelo de Machine Learning.")
+    else:
+        st.markdown("""
+        Esta pestaña utiliza un modelo de **Random Forest Regressor** entrenado dinámicamente con los datos que cargaste. 
+        Permite predecir cuál sería la **tasa de interés estimada (E.A.)** para una operación en función del tipo de crédito, entidad y monto desembolsado.
+        """)
+        
+        df_ml = st.session_state.df_clean.copy()
+        
+        req_cols = ['tasa_efectiva_promedio', 'monto_desembolsado', 'tipo_credito']
+        if not all(col in df_ml.columns for col in req_cols):
+            st.warning("El dataset necesita al menos las columnas `tasa_efectiva_promedio`, `monto_desembolsado` y `tipo_credito` para ejecutar la predicción.")
+        else:
+            # Preprocesamiento para ML
+            feature_cols = ['monto_desembolsado', 'tipo_credito']
+            if 'nombre_entidad' in df_ml.columns:
+                feature_cols.append('nombre_entidad')
+                
+            df_model_data = df_ml[feature_cols + ['tasa_efectiva_promedio']].dropna()
+            
+            if len(df_model_data) < 10:
+                st.error("Se requieren al menos 10 registros válidos en el archivo para entrenar el modelo.")
+            else:
+                # One-Hot Encoding de variables categóricas
+                cat_cols = [c for c in ['tipo_credito', 'nombre_entidad'] if c in df_model_data.columns]
+                df_encoded = pd.get_dummies(df_model_data, columns=cat_cols, drop_first=False)
+                
+                X = df_encoded.drop(columns=['tasa_efectiva_promedio'])
+                y = df_encoded['tasa_efectiva_promedio']
+                
+                # Entrenamiento del modelo
+                rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+                rf_model.fit(X, y)
+                
+                st.success("✅ Modelo entrenado exitosamente.")
+                
+                st.markdown("---")
+                st.subheader("🔮 Cotizador Predictivo de Tasa")
+                
+                c_ml1, c_ml2, c_ml3 = st.columns(3)
+                
+                with c_ml1:
+                    monto_pred = st.number_input(
+                        "Monto a evaluar ($ COP):", 
+                        min_value=1000000, 
+                        max_value=500000000, 
+                        value=20000000, 
+                        step=1000000,
+                        key="ml_monto"
+                    )
+                    
+                with c_ml2:
+                    tipos_opt = list(df_ml['tipo_credito'].unique())
+                    tipo_pred = st.selectbox("Tipo de Crédito:", tipos_opt, key="ml_tipo")
+                    
+                with c_ml3:
+                    if 'nombre_entidad' in df_ml.columns:
+                        bancos_opt = list(df_ml['nombre_entidad'].unique())
+                        banco_pred = st.selectbox("Entidad Financiera:", bancos_opt, key="ml_banco")
+                    else:
+                        banco_pred = None
+                        
+                if st.button("🚀 Predecir Tasa Estimada"):
+                    # Construcción de vector de entrada en cero
+                    input_row = pd.DataFrame(0, index=[0], columns=X.columns)
+                    
+                    if 'monto_desembolsado' in input_row.columns:
+                        input_row['monto_desembolsado'] = monto_pred
+                        
+                    col_tipo = f"tipo_credito_{tipo_pred}"
+                    if col_tipo in input_row.columns:
+                        input_row[col_tipo] = 1
+                        
+                    if banco_pred:
+                        col_banco = f"nombre_entidad_{banco_pred}"
+                        if col_banco in input_row.columns:
+                            input_row[col_banco] = 1
+                            
+                    tasa_predicha = rf_model.predict(input_row)[0]
+                    cuota_pred, int_pred, total_pred = calcular_cuota_fija(monto_pred, tasa_predicha, 24)
+                    
+                    st.markdown("### 📊 Resultado de la Predicción")
+                    p1, p2, p3 = st.columns(3)
+                    p1.metric("Tasa Estimada (E.A.)", f"{tasa_predicha:.2f}%")
+                    p2.metric("Tasa Mensual (E.M.)", f"{ea_to_em(tasa_predicha)*100:.2f}%")
+                    p3.metric("Cuota Estimada (24m)", f"${cuota_pred:,.0f}")
