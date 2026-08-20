@@ -257,6 +257,20 @@ with tab_dashboard:
                 )
                 st.plotly_chart(fig_rank, use_container_width=True)
 
+            with c_chart2:
+                if 'tipo_credito' in df_curr.columns and 'monto_desembolsado' in df_curr.columns:
+                    fig_pie = px.pie(
+                        df_curr,
+                        names='tipo_credito',
+                        values='monto_desembolsado',
+                        hole=0.4,
+                        title="Distribución del Crédito por Tipo",
+                        color_discrete_sequence=px.colors.qualitative.Pastel,
+                        template='plotly_white'
+                    )
+                    fig_pie.update_layout(font=dict(color="#212529"))
+                    st.plotly_chart(fig_pie, use_container_width=True)
+
 # =============================================================================
 # PESTAÑA 3: CALCULADORA Y COMPARADOR DE CRÉDITOS
 # =============================================================================
