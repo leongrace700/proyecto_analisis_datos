@@ -89,19 +89,18 @@ def clean_data(df):
         .str.replace("ñ", "n")
     )
 
-    # 2. Mapeo específico ajustado a los encabezados de Datos Abiertos Colombia / Socrata
+  # 2. Mapeo específico ajustado a los encabezados de Datos Abiertos Colombia / Socrata
     col_map = {
         # Entidad
         'nombre_de_la_entidad': 'nombre_entidad',
         'entidad': 'nombre_entidad',
         'banco': 'nombre_entidad',
         
-        # Tipo / Modalidad de Crédito (Soporta variaciones de tilde y guiones)
+        # Tipo / Modalidad de Crédito
         'tipo_de_credito': 'tipo_credito',
         'tipo_de_cr_dito': 'tipo_credito',
         'modalidad': 'tipo_credito',
         'linea_de_credito': 'tipo_credito',
-        'producto': 'tipo_credito',
         
         # Tasa de Interés
         'tasa_efectiva_promedio_ponderada': 'tasa_efectiva_promedio',
@@ -109,14 +108,31 @@ def clean_data(df):
         'tasa_ea': 'tasa_efectiva_promedio',
         'tasa': 'tasa_efectiva_promedio',
         
-        # Montos (Soporta plurales de Datos Abiertos)
+        # Montos
         'montos_desembolsados': 'monto_desembolsado',
         'monto_desembolsado': 'monto_desembolsado',
         'monto': 'monto_desembolsado',
         
         # Créditos
         'numero_de_creditos': 'numero_creditos',
-        'creditos': 'numero_creditos'
+        'creditos': 'numero_creditos',
+
+        # --- NUEVOS ENCABEZADOS AÑADIDOS ---
+        'tipo_de_garantia': 'tipo_garantia',
+        'tipo_de_garant_a': 'tipo_garantia',       # Formato CSV Datos Abiertos
+        'garantia': 'tipo_garantia',
+
+        'producto_de_credito': 'producto_credito',
+        'producto_de_cr_dito': 'producto_credito',  # Formato CSV Datos Abiertos
+        'producto': 'producto_credito',
+
+        'plazo_de_credito': 'plazo_credito',
+        'plazo_de_cr_dito': 'plazo_credito',        # Formato CSV Datos Abiertos
+        'plazo': 'plazo_credito',
+
+        'tamano_de_empresa': 'tamano_empresa',
+        'tama_o_de_empresa': 'tamano_empresa',      # Formato CSV Datos Abiertos
+        'tamano_empresa': 'tamano_empresa'
     }
     
     df = df.rename(columns=col_map)
