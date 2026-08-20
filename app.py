@@ -237,18 +237,25 @@ with tab_dashboard:
         c_chart1, c_chart2 = st.columns(2)
         with c_chart1:
             if 'tasa_efectiva_promedio' in df_curr.columns and 'nombre_entidad' in df_curr.columns:
-                df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio')
+                # Ordenamiento de mayor a menor tasa
+                df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio', ascending=False)
+                
                 fig_rank = px.bar(
                     df_rank,
                     x='tasa_efectiva_promedio',
                     y='nombre_entidad',
                     orientation='h',
-                    title="Ranking de Tasas Efectivas Promedio",
+                    title="Ranking de Tasas Efectivas Promedio (Mayor a Menor)",
                     color='tasa_efectiva_promedio',
-                    color_continuous_scale='Blues_r',
+                    color_continuous_scale='Reds',  # Paleta de rojos para resaltar el costo
                     template='plotly_white'
                 )
-                fig_rank.update_layout(font=dict(color="#212529"))
+                
+                # Mantiene el orden descendente de arriba hacia abajo en Plotly
+                fig_rank.update_layout(
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(color="#212529")
+                )
                 st.plotly_chart(fig_rank, use_container_width=True)
                 
         with c_chart2:
