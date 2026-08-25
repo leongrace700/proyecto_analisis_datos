@@ -557,432 +557,160 @@ with tab_eda:
         )
 
 
-# ============================================================
-# PESTAÑA 2 - DASHBOARD
-# ============================================================
-
+# =============================================================================
+# PESTAÑA 2: DASHBOARD DE TASAS Y MERCADO
+# =============================================================================
 with tab_dashboard:
-
-    st.header("📊 Dashboard Financiero")
-
+    st.header("📊 Dashboard Financiero General")
+    
     if st.session_state.df_clean is None:
-
-        st.warning("Carga primero los datos en la Pestaña #1.")
-
+        st.warning("⚠️ No se ha cargado ninguna data. Ve a la **Pestaña #1** y sube tu archivo CSV para ver los gráficos.")
     else:
-
-        df = st.session_state.df_clean
-
-        c1, c2, c3 = st.columns(3)
-
-        if "tasa_efectiva_promedio" in df.columns:
-            c1.metric(
-                "Tasa Promedio",
-                f"{df['tasa_efectiva_promedio'].mean():.2f}% E.A."
-            )
-
-        if "monto_desembolsado" in df.columns:
-            c2.metric(
-                "Monto Desembolsado",
-                f"${df['monto_desembolsado'].sum()/1e6:,.0f} M"
-            )
-
-        if "numero_creditos" in df.columns:
-            c3.metric(
-                "Créditos",
-                f"{df['numero_creditos'].sum():,.0f}"
-            )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            if "nombre_entidad" in df.columns:
-
-                ranking = (
-                    df.groupby("nombre_entidad")
-                    ["tasa_efectiva_promedio"]
-                    .mean()
-                    .reset_index()
-                    .sort_values("tasa_efectiva_promedio")
+        df_curr = st.session_state.df_clean
+        
+        col1, col2, col3 = st.columns(3)
+        if 'tasa_efectiva_promedio' in df_curr.columns:
+            col1.metric("Tasa Promedio Mercado", f"{df_curr['tasa_efectiva_promedio'].mean():.2f}% E.A.")
+        if 'monto_desembolsado' in df_curr.columns:
+            col2.metric("Volumen Desembolsado Total", f"${df_curr['monto_desembolsado'].sum()/1e6:,.0f} M")
+        if 'numero_creditos' in df_curr.columns:
+            col3.metric("Créditos Registrados", f"{df_curr['numero_creditos'].sum():,.0f}")
+        
+        st.markdown("---")
+        
+        c_chart1, c_chart2 = st.columns(2)
+        with c_chart1:
+            if 'tasa_efectiva_promedio' in df_curr.columns and 'nombre_entidad' in df_curr.columns:
+                df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio', ascending=True)
+                
+                fig_rank = px.bar(
+                    df_rank,
+                    x='tasa_efectiva_promedio',
+                    y='nombre_entidad',
+                    orientation='h',
+                    title="Ranking de Tasas Efectivas Promedio (Menor a Mayor)",
+                    color='tasa_efectiva_promedio',
+                    color_continuous_scale='Blues_r',
+                    template='plotly_white'
                 )
-
-                fig = px.bar(
-                    ranking,
-                    x="tasa_efectiva_promedio",
-                    y="nombre_entidad",
-                    orientation="h",
-                    title="Ranking de Tasas",
-                    template="plotly_white"
+                fig_rank.update_layout(
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(color="#212529")
                 )
-
-                st.plotly_chart(
-                    fig,
-                    use_container_width=True
+                st.plotly_chart(fig_rank, use_container_width=True)
+                
+        with c_chart2:
+            if 'tipo_credito' in df_curr.columns and 'monto_desembolsado' in df_curr.columns:
+                fig_pie = px.pie(
+                    df_curr,
+                    names='tipo_credito',
+                    values='monto_desembolsado',
+                    hole=0.4,
+                    title="Distribución del Crédito por Tipo",
+                    color_discrete_sequence=px.colors.qualitative.Pastel,
+                    template='plotly_white'
                 )
+                fig_pie.update_layout(font=dict(color="#212529"))
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-        with col2:
-
-            if (
-                "tipo_credito" in df.columns
-                and "monto_desembolsado" in df.columns
-            ):
-
-                fig = px.pie(
-                    df,
-                    names="tipo_credito",
-                    values="monto_desembolsado",
-                    hole=.4,
-                    title="Distribución por Tipo de Crédito"
-                )
-
-                st.plotly_chart(
-                    fig,
-                    use_container_width=True
-                )
-
-
-# ============================================================
-# PESTAÑA 3 - CALCULADORA
-# ============================================================
-
+# =============================================================================
+# PESTAÑA 3: CALCULADORA Y COMPARADOR DE CRÉDITOS
+# =============================================================================
 with tab_simulador:
-
-    st.header("🧮 Calculadora & Comparador")
-
+    st.header("🧮 Simulación de Préstamo y Comparativa Bancaria")
+    
     if st.session_state.df_clean is None:
-
-        st.warning("Carga primero los datos.")
-
+        st.warning("⚠️ No se ha cargado ninguna data. Ve a la **Pestaña #1** y sube tu archivo CSV para simular créditos.")
     else:
-
-        df = st.session_state.df_clean
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1:
-
-            monto = st.number_input(
-                "Monto ($ COP)",
-                min_value=500000,
-                value=10000000,
+        col_in1, col_in2, col_in3 = st.columns(3)
+        
+        with col_in1:
+            monto_solicitado = st.number_input(
+                "Monto a Solicitar ($ COP):", 
+                min_value=500000, 
+                max_value=1000000000, 
+                value=10000000, 
                 step=1000000
             )
-
-        with c2:
-
-            plazo = st.slider(
-                "Plazo (meses)",
-                6,
-                120,
-                24,
+        
+        with col_in2:
+            plazo_meses = st.slider(
+                "Plazo (Meses):", 
+                min_value=6, 
+                max_value=120, 
+                value=24, 
                 step=6
             )
-
-        with c3:
-
-            tipos = list(df["tipo_credito"].unique())
-
-            tipo = st.selectbox(
-                "Tipo de crédito",
-                tipos
-            )
-
-        datos = df[df["tipo_credito"] == tipo]
-
-        resultados = []
-
-        for _, row in (
-            datos.groupby("nombre_entidad")
-            ["tasa_efectiva_promedio"]
-            .mean()
-            .reset_index()
-            .iterrows()
-        ):
-
-            cuota, intereses, total = calcular_cuota(
-                monto,
-                row["tasa_efectiva_promedio"],
-                plazo
-            )
-
-            resultados.append({
-                "Entidad": row["nombre_entidad"],
-                "Tasa E.A. (%)":
-                    row["tasa_efectiva_promedio"],
-                "Cuota Mensual ($)": cuota,
-                "Intereses ($)": intereses,
-                "Total ($)": total
-            })
-
-        resultados = pd.DataFrame(resultados)
-
-        if not resultados.empty:
-
-            resultados = resultados.sort_values(
-                "Cuota Mensual ($)"
-            )
-
-            mejor = resultados.iloc[0]
-
-            st.subheader("🏆 Mejor opción")
-
-            m1, m2, m3 = st.columns(3)
-
-            m1.metric(
-                "Entidad",
-                mejor["Entidad"]
-            )
-
-            m2.metric(
-                "Tasa",
-                f"{mejor['Tasa E.A. (%)']:.2f}%"
-            )
-
-            m3.metric(
-                "Cuota",
-                f"${mejor['Cuota Mensual ($)']:,.0f}"
-            )
-
-            st.dataframe(
-                resultados.style.format({
-                    "Tasa E.A. (%)": "{:.2f}%",
-                    "Cuota Mensual ($)": "${:,.0f}",
-                    "Intereses ($)": "${:,.0f}",
-                    "Total ($)": "${:,.0f}"
-                }),
-                use_container_width=True
-            )
-
-
-# ============================================================
-# PESTAÑA 4 - ANÁLISIS
-# ============================================================
-
-with tab_analysis:
-
-    st.header("📈 Análisis e Interpretación")
-
-    if st.session_state.df_clean is None:
-
-        st.warning("Carga primero los datos.")
-
-    else:
-
-        df = st.session_state.df_clean
-
-        ranking = (
-            df.groupby("nombre_entidad")
-            ["tasa_efectiva_promedio"]
-            .mean()
-            .reset_index()
-            .sort_values("tasa_efectiva_promedio")
-        )
-
-        mejor = ranking.iloc[0]
-        peor = ranking.iloc[-1]
-        promedio = ranking["tasa_efectiva_promedio"].mean()
-
-        c1, c2, c3 = st.columns(3)
-
-        c1.metric(
-            "Promedio Mercado",
-            f"{promedio:.2f}% E.A."
-        )
-
-        c2.metric(
-            "🥇 Mejor Entidad",
-            mejor["nombre_entidad"]
-        )
-
-        c3.metric(
-            "🔻 Mayor Tasa",
-            peor["nombre_entidad"]
-        )
-
-        fig = px.bar(
-            ranking,
-            x="tasa_efectiva_promedio",
-            y="nombre_entidad",
-            orientation="h",
-            title="Ranking de Tasas",
-            template="plotly_white"
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-        st.success(f"""
-        ### 🏆 Mejor opción
-
-        **{mejor['nombre_entidad']}**
-
-        Tasa promedio: **{mejor['tasa_efectiva_promedio']:.2f}% E.A.**
-        """)
-
-        st.warning(f"""
-        ### ⚠️ Mayor tasa
-
-        **{peor['nombre_entidad']}**
-
-        Tasa promedio:
-        **{peor['tasa_efectiva_promedio']:.2f}% E.A.**
-        """)
-
-
-# ============================================================
-# PESTAÑA 5 - MACHINE LEARNING
-# ============================================================
-
-with tab_ml:
-
-    st.header("🤖 Predicción & Recomendador")
-
-    if st.session_state.df_clean is None:
-
-        st.warning("Carga primero los datos.")
-
-    else:
-
-        df = st.session_state.df_clean.copy()
-
-        columnas = [
-            "tasa_efectiva_promedio",
-            "monto_desembolsado",
-            "tipo_credito"
-        ]
-
-        if all(c in df.columns for c in columnas):
-
-            modelo_df = df[
-                columnas + ["nombre_entidad"]
-            ].dropna()
-
-            if len(modelo_df) >= 10:
-
-                datos = pd.get_dummies(
-                    modelo_df,
-                    columns=[
-                        "tipo_credito",
-                        "nombre_entidad"
-                    ]
-                )
-
-                X = datos.drop(
-                    columns="tasa_efectiva_promedio"
-                )
-
-                y = datos["tasa_efectiva_promedio"]
-
-                modelo = RandomForestRegressor(
-                    n_estimators=100,
-                    random_state=42
-                )
-
-                modelo.fit(X, y)
-
-                st.success(
-                    "✅ Modelo entrenado correctamente."
-                )
-
-                monto_ml = st.number_input(
-                    "Monto a solicitar",
-                    min_value=1000000,
-                    value=20000000,
-                    step=1000000
-                )
-
-                tipo_ml = st.selectbox(
-                    "Tipo de crédito",
-                    df["tipo_credito"].unique()
-                )
-
-                if st.button(
-                    "🚀 Encontrar mejor entidad"
-                ):
-
-                    resultados = []
-
-                    for banco in df["nombre_entidad"].unique():
-
-                        entrada = pd.DataFrame(
-                            0,
-                            index=[0],
-                            columns=X.columns
-                        )
-
-                        if "monto_desembolsado" in entrada:
-                            entrada[
-                                "monto_desembolsado"
-                            ] = monto_ml
-
-                        tipo_col = f"tipo_credito_{tipo_ml}"
-                        banco_col = f"nombre_entidad_{banco}"
-
-                        if tipo_col in entrada:
-                            entrada[tipo_col] = 1
-
-                        if banco_col in entrada:
-                            entrada[banco_col] = 1
-
-                        pred = modelo.predict(
-                            entrada
-                        )[0]
-
-                        resultados.append({
-                            "Entidad": banco,
-                            "Tasa Estimada": pred
-                        })
-
-                    predicciones = pd.DataFrame(
-                        resultados
-                    ).sort_values(
-                        "Tasa Estimada"
-                    )
-
-                    mejor = predicciones.iloc[0]
-
-                    st.success(
-                        f"🏆 Entidad recomendada: "
-                        f"**{mejor['Entidad']}**"
-                    )
-
-                    st.metric(
-                        "Tasa estimada",
-                        f"{mejor['Tasa Estimada']:.2f}% E.A."
-                    )
-
-                    fig = px.bar(
-                        predicciones,
-                        x="Tasa Estimada",
-                        y="Entidad",
-                        orientation="h",
-                        title="Tasas Estimadas",
-                        template="plotly_white"
-                    )
-
-                    st.plotly_chart(
-                        fig,
-                        use_container_width=True
-                    )
-
-                    st.dataframe(
-                        predicciones,
-                        use_container_width=True
-                    )
-
+            
+        with col_in3:
+            if 'tipo_credito' in st.session_state.df_clean.columns:
+                tipos_disponibles = list(st.session_state.df_clean['tipo_credito'].unique())
+                tipo_credito_sel = st.selectbox("Tipo de Crédito:", tipos_disponibles)
             else:
+                tipo_credito_sel = None
 
-                st.error(
-                    "Se necesitan al menos 10 registros "
-                    "válidos para entrenar el modelo."
-                )
-
+        st.markdown("---")
+        
+        if tipo_credito_sel and 'tipo_credito' in st.session_state.df_clean.columns:
+            df_tasas = st.session_state.df_clean[st.session_state.df_clean['tipo_credito'] == tipo_credito_sel]
         else:
+            df_tasas = st.session_state.df_clean
 
-            st.warning# =============================================================================
+        if df_tasas.empty or 'tasa_efectiva_promedio' not in df_tasas.columns:
+            st.warning("No hay datos de tasas válidos en el archivo cargado para realizar la simulación.")
+        else:
+            resumen_bancos = df_tasas.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index()
+            
+            resultados = []
+            for _, row in resumen_bancos.iterrows():
+                banco = row['nombre_entidad']
+                tasa_ea = row['tasa_efectiva_promedio']
+                cuota, intereses, total = calcular_cuota_fija(monto_solicitado, tasa_ea, plazo_meses)
+                
+                resultados.append({
+                    'Entidad': banco,
+                    'Tasa E.A. (%)': round(tasa_ea, 2),
+                    'Tasa E.M. (%)': round(ea_to_em(tasa_ea) * 100, 2),
+                    'Cuota Mensual ($)': cuota,
+                    'Total Intereses ($)': intereses,
+                    'Total a Pagar ($)': total
+                })
+                
+            df_res = pd.DataFrame(resultados).sort_values(by='Cuota Mensual ($)')
+            mejor = df_res.iloc[0]
+            
+            st.subheader("🏆 Resumen de la Mejor Opción")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("🏆 Mejor Opción", mejor['Entidad'])
+            m2.metric("📉 Menor Tasa E.A.", f"{mejor['Tasa E.A. (%)']}%")
+            m3.metric("💰 Menor Cuota", f"${mejor['Cuota Mensual ($)']:,.0f}")
+            m4.metric("💵 Total a Pagar", f"${mejor['Total a Pagar ($)']:,.0f}")
+            
+            st.markdown("### 📋 Cuadro Comparativo Completo por Banco")
+            
+            df_view = df_res.copy()
+            df_view['Cuota Mensual ($)'] = df_view['Cuota Mensual ($)'].apply(lambda x: f"${x:,.0f}")
+            df_view['Total Intereses ($)'] = df_view['Total Intereses ($)'].apply(lambda x: f"${x:,.0f}")
+            df_view['Total a Pagar ($)'] = df_view['Total a Pagar ($)'].apply(lambda x: f"${x:,.0f}")
+            df_view['Tasa E.A. (%)'] = df_view['Tasa E.A. (%)'].apply(lambda x: f"{x:.2f}%")
+            df_view['Tasa E.M. (%)'] = df_view['Tasa E.M. (%)'].apply(lambda x: f"{x:.2f}%")
+            
+            st.dataframe(df_view, use_container_width=True)
+            
+            fig_bar = px.bar(
+                df_res,
+                x='Entidad',
+                y='Cuota Mensual ($)',
+                color='Tasa E.A. (%)',
+                title=f"Comparativa de Cuotas Mensuales para ${monto_solicitado:,.0f} a {plazo_meses} meses",
+                text_auto=',.0f',
+                color_continuous_scale='Teal_r',
+                template='plotly_white'
+            )
+            fig_bar.update_layout(font=dict(color="#212529"))
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+# =============================================================================
 # PESTAÑA 4: ANÁLISIS E INTERPRETACIÓN
 # =============================================================================
 with tab_analysis:
@@ -1199,9 +927,3 @@ with tab_ml:
                     df_preds_view['Total Intereses ($)'] = df_preds_view['Total Intereses ($)'].apply(lambda x: f"${x:,.0f}")
                     
                     st.dataframe(df_preds_view, use_container_width=True)
-
-            El dataset debe contener las columnas:
-            tasa_efectiva_promedio,
-            monto_desembolsado y
-            tipo_credito.
-            """)
