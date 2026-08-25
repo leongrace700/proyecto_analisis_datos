@@ -211,7 +211,7 @@ with tab_inicio:
    # Integrantes
 st.markdown("## 👥 Integrantes del equipo")
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.info("### 👤 Grace Leon")
@@ -221,6 +221,9 @@ with col2:
 
 with col3:
     st.info("### 👤 Marco Jimenez")
+
+with col4:
+    st.info("### 👤 Zurley Taborda")
 
     st.markdown("---")
 
