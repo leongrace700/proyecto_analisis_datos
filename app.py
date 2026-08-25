@@ -208,19 +208,22 @@ with tab_inicio:
     </div>
     """, unsafe_allow_html=True)
 
-    # Integrantes
-    st.markdown("## 👥 Integrantes del equipo")
+   # Integrantes
+st.markdown("## 👥 Integrantes del equipo")
 
-    col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
-    with col1:
-        st.info("### 👤 Grace Leon")
+with col1:
+    st.info("### 👤 Grace Leon")
 
-    with col2:
-        st.info("### 👤 Mayerly Roman")
+with col2:
+    st.info("### 👤 Mayerly Roman")
 
-    with col3:
-        st.info("### 👤 Marco Jimenez")
+with col3:
+    st.info("### 👤 Marco Jimenez")
+
+with col4:
+    st.info("### 👤 Zurley Taborda")
 
     st.markdown("---")
 
