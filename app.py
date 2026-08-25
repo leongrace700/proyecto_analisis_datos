@@ -181,6 +181,189 @@ tab_inicio, tab_eda, tab_dashboard, tab_simulador, tab_analysis, tab_ml = st.tab
     "🤖 5. Predicción con ML"
 ])
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+from sklearn.ensemble import RandomForestRegressor
+
+# -----------------------------------------------------------------------------
+# CONFIGURACIÓN DE PÁGINA Y TEMA CLARO
+# -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Monitor Financiero & Cotizador de Créditos Colombia",
+    page_icon="🏦",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #F8F9FA;
+        color: #212529;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    div[data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+        font-weight: 700;
+        color: #0F52BA;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 12px;
+        background-color: #E9ECEF;
+        padding: 8px;
+        border-radius: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: transparent;
+        border-radius: 6px;
+        color: #495057;
+        font-weight: 600;
+        padding: 8px 16px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #FFFFFF !important;
+        color: #0F52BA !important;
+        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# FUNCIONES AUXILIARES DE CÁLCULO FINANCIERO
+# -----------------------------------------------------------------------------
+def ea_to_em(tasa_ea):
+    if pd.isna(tasa_ea) or tasa_ea <= 0:
+        return 0.0
+    return ((1 + tasa_ea / 100.0) ** (1.0 / 12.0) - 1.0)
+
+def calcular_cuota_fija(monto, tasa_ea, plazo_meses):
+    if plazo_meses <= 0 or monto <= 0:
+        return 0.0, 0.0, 0.0
+    
+    i_m = ea_to_em(tasa_ea)
+    if i_m == 0:
+        cuota = monto / plazo_meses
+    else:
+        cuota = monto * (i_m * ((1 + i_m) ** plazo_meses)) / (((1 + i_m) ** plazo_meses) - 1)
+    
+    total_pagar = cuota * plazo_meses
+    total_intereses = total_pagar - monto
+    return cuota, total_intereses, total_pagar
+
+# -----------------------------------------------------------------------------
+# LIMPIEZA Y TRANSFORMACIÓN DE DATOS DINÁMICA
+# -----------------------------------------------------------------------------
+def clean_data(df):
+    df = df.copy()
+
+    # 1. Normalización inicial de nombres de columnas
+    df.columns = (
+        df.columns.str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
+        .str.replace("á", "a")
+        .str.replace("é", "e")
+        .str.replace("í", "i")
+        .str.replace("ó", "o")
+        .str.replace("ú", "u")
+        .str.replace("ñ", "n")
+    )
+
+    # 2. Mapeo específico ajustado a los encabezados de Datos Abiertos Colombia / Socrata
+    col_map = {
+        # Entidad
+        'nombre_de_la_entidad': 'nombre_entidad',
+        'entidad': 'nombre_entidad',
+        'banco': 'nombre_entidad',
+        
+        # Tipo / Modalidad de Crédito
+        'tipo_de_credito': 'tipo_credito',
+        'tipo_de_cr_dito': 'tipo_credito',
+        'modalidad': 'tipo_credito',
+        'linea_de_credito': 'tipo_credito',
+        'producto': 'tipo_credito',
+        
+        # Tasa de Interés
+        'tasa_efectiva_promedio_ponderada': 'tasa_efectiva_promedio',
+        'tasa_efectiva_promedio': 'tasa_efectiva_promedio',
+        'tasa_ea': 'tasa_efectiva_promedio',
+        'tasa': 'tasa_efectiva_promedio',
+        
+        # Montos
+        'montos_desembolsados': 'monto_desembolsado',
+        'monto_desembolsado': 'monto_desembolsado',
+        'monto': 'monto_desembolsado',
+        
+        # Créditos
+        'numero_de_creditos': 'numero_creditos',
+        'creditos': 'numero_creditos',
+
+        # Encabezados de Datos Abiertos
+        'tipo_de_garantia': 'tipo_garantia',
+        'tipo_de_garant_a': 'tipo_garantia',
+        'garantia': 'tipo_garantia',
+
+        'producto_de_credito': 'producto_credito',
+        'producto_de_cr_dito': 'producto_credito',
+
+        'plazo_de_credito': 'plazo_credito',
+        'plazo_de_cr_dito': 'plazo_credito',
+
+        'tamano_de_empresa': 'tamano_empresa',
+        'tama_o_de_empresa': 'tamano_empresa'
+    }
+    
+    df = df.rename(columns=col_map)
+
+    # 3. Asegurar columnas esenciales si no venían en el CSV
+    if 'tipo_credito' not in df.columns:
+        df['tipo_credito'] = 'General'
+    else:
+        df['tipo_credito'] = df['tipo_credito'].fillna('General')
+
+    if 'nombre_entidad' not in df.columns:
+        df['nombre_entidad'] = 'Desconocido'
+    else:
+        df['nombre_entidad'] = df['nombre_entidad'].fillna('Desconocido')
+
+    # 4. Conversión Numérica
+    num_cols = ['tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos']
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # 5. Filtros de calidad
+    if 'tasa_efectiva_promedio' in df.columns:
+        df = df[df['tasa_efectiva_promedio'] > 0]
+        df = df[(df['tasa_efectiva_promedio'] >= 1.0) & (df['tasa_efectiva_promedio'] <= 100.0)]
+
+    if 'monto_desembolsado' in df.columns:
+        df['monto_desembolsado'] = df['monto_desembolsado'].fillna(0)
+
+    return df.drop_duplicates()
+
+# Inicialización del Session State
+if 'df_clean' not in st.session_state:
+    st.session_state.df_clean = None
+
+# -----------------------------------------------------------------------------
+# INTERFAZ Y PESTAÑAS
+# -----------------------------------------------------------------------------
+st.title("🏦 Monitor Financiero & Cotizador de Créditos")
+
+tab_inicio, tab_eda, tab_dashboard, tab_simulador, tab_analysis, tab_ml = st.tabs([
+    "🏠 0. Proyecto",
+    "🔍 1. Cargar & Explorar Datos",
+    "📊 2. Dashboard de Tasas",
+    "🧮 3. Calculadora & Comparador",
+    "📈 4. Análisis e Interpretación",
+    "🤖 5. Predicción con ML"
+])
+
 # =============================================================================
 # PESTAÑA 0: PRESENTACIÓN DEL PROYECTO / PITCH
 # =============================================================================
