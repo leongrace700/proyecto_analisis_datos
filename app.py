@@ -508,54 +508,38 @@ with tab_inicio:
     """, unsafe_allow_html=True)
 
 
-# ============================================================
-# PESTAÑA 1 - CARGAR DATOS
-# ============================================================
-
+# =============================================================================
+# PESTAÑA 1: CARGAR Y EXPLORAR DATOS
+# =============================================================================
 with tab_eda:
-
     st.header("🔍 Carga de Archivo de Datos")
-
-    archivo = st.file_uploader(
-        "Seleccionar archivo",
-        type=["csv", "xlsx"]
-    )
-
-    if archivo:
-
+    st.markdown("Sube tu archivo `.csv` o `.xlsx` para mapear y procesar las variables automáticamente:")
+    
+    uploaded_file = st.file_uploader("Seleccionar archivo de datos", type=["csv", "xlsx"])
+    
+    if uploaded_file is not None:
         try:
-
-            if archivo.name.endswith(".csv"):
-                df = pd.read_csv(archivo)
+            if uploaded_file.name.endswith('.csv'):
+                df_raw = pd.read_csv(uploaded_file)
             else:
-                df = pd.read_excel(archivo)
-
-            st.session_state.df_clean = clean_data(df)
-
-            st.success("✅ Archivo cargado correctamente.")
-
+                df_raw = pd.read_excel(uploaded_file)
+            
+            st.session_state.df_clean = clean_data(df_raw)
+            st.success("✅ ¡Archivo cargado y columnas transformadas correctamente!")
         except Exception as e:
-
             st.error(f"Error al procesar el archivo: {e}")
 
+    st.markdown("---")
+    
     if st.session_state.df_clean is not None:
-
-        df = st.session_state.df_clean
-
-        st.markdown("### 📋 Vista previa")
-
-        st.dataframe(
-            df,
-            use_container_width=True
-        )
-
+        st.markdown("### 📋 Vista Previa de la Data Transformada")
+        
+        cols_mapeadas = [c for c in ['nombre_entidad', 'tipo_credito', 'tasa_efectiva_promedio', 'monto_desembolsado', 'numero_creditos', 'tipo_garantia', 'producto_credito', 'plazo_credito', 'tamano_empresa'] if c in st.session_state.df_clean.columns]
+        st.info(f"Campos clave detectados y normalizados: **{', '.join(cols_mapeadas)}**")
+        
+        st.dataframe(st.session_state.df_clean, use_container_width=True)
     else:
-
-        st.info(
-            "👆 Carga un archivo CSV o Excel para habilitar "
-            "las demás pestañas."
-        )
-
+        st.info("👆 Por favor sube un archivo CSV para generar el mapeo y habilitar las demás pestañas.")
 
 # =============================================================================
 # PESTAÑA 2: DASHBOARD DE TASAS Y MERCADO
