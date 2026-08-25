@@ -982,7 +982,224 @@ with tab_ml:
 
         else:
 
-            st.warning("""
+            st.warning# =============================================================================
+# PESTAÑA 4: ANÁLISIS E INTERPRETACIÓN
+# =============================================================================
+with tab_analysis:
+    st.header("📈 Diagnóstico e Interpretación Financiera")
+    
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ No se ha cargado ninguna data. Ve a la **Pestaña #1** y sube tu archivo CSV para visualizar el diagnóstico.")
+    else:
+        st.markdown("Analizamos los datos cargados en la **Pestaña #2 (Dashboard)** para entregarte un diagnóstico claro y dinámico de la mejor opción del mercado.")
+        
+        df_curr = st.session_state.df_clean
+        
+        if df_curr.empty or 'tasa_efectiva_promedio' not in df_curr.columns or 'nombre_entidad' not in df_curr.columns:
+            st.warning("Se requieren columnas válidas de 'entidad' y 'tasa' en el archivo cargado para generar el análisis interpretativo.")
+        else:
+            # Ordenamiento ascendente (de menor a mayor tasa)
+            df_rank = df_curr.groupby('nombre_entidad')['tasa_efectiva_promedio'].mean().reset_index().sort_values(by='tasa_efectiva_promedio', ascending=True)
+            
+            mejor_banco = df_rank.iloc[0]
+            peor_banco = df_rank.iloc[-1]
+            tasa_promedio_mkt = df_rank['tasa_efectiva_promedio'].mean()
+            diferencial_tasas = peor_banco['tasa_efectiva_promedio'] - mejor_banco['tasa_efectiva_promedio']
+            ahorro_vs_promedio = tasa_promedio_mkt - mejor_banco['tasa_efectiva_promedio']
+
+            st.markdown("### 📊 Datos Consolidados del Mercado")
+            c1, c2 = st.columns([2, 1])
+            
+            with c1:
+                fig_rank_tab4 = px.bar(
+                    df_rank,
+                    x='tasa_efectiva_promedio',
+                    y='nombre_entidad',
+                    orientation='h',
+                    title="Ranking de Tasas Efectivas Promedio (Menor a Mayor)",
+                    color='tasa_efectiva_promedio',
+                    color_continuous_scale='Blues_r',
+                    template='plotly_white'
+                )
+                fig_rank_tab4.update_layout(
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(color="#212529")
+                )
+                st.plotly_chart(fig_rank_tab4, use_container_width=True, key="chart_rank_tab4")
+                
+            with c2:
+                st.metric("Tasa Promedio Mercado", f"{tasa_promedio_mkt:.2f}% E.A.")
+                st.metric("🥇 Mejor Entidad", f"{mejor_banco['nombre_entidad']}", f"{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
+                st.metric("🔻 Entidad Más Costosa", f"{peor_banco['nombre_entidad']}", f"{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.")
+                st.metric("Spread de Mercado", f"{diferencial_tasas:.2f}% E.A.")
+
+            st.markdown("---")
+            
+            st.markdown("### 🧠 ¿Qué significan estos números para tu dinero?")
+
+            st.success(f"""
+            ### 🏆 1. La Opción Ganadora: **{mejor_banco['nombre_entidad']}**
+            * **Tasa Ofrecida:** **{mejor_banco['tasa_efectiva_promedio']:.2f}% E.A.**
+            * **Ventaja Clave:** Se ubica **{ahorro_vs_promedio:.2f}% por debajo** del promedio del mercado. Es la alternativa que menor costo financiero generará sobre tu capital desembolsado.
+            """)
+
+            st.warning(f"""
+            ### ⚠️ 2. La Opción Menos Conveniente: **{peor_banco['nombre_entidad']}**
+            * **Tasa Ofrecida:** **{peor_banco['tasa_efectiva_promedio']:.2f}% E.A.**
+            * **Impacto Financiero:** Hay una brecha de **{diferencial_tasas:.2f}%** entre la mejor y la peor opción. Tomar tu crédito aquí implica pagar intereses efectivamente más altos por exactamente la misma suma.
+            """)
+
+            st.info(f"""
+            ### 💡 3. Guía Rápida para Decidir
+            * **Criterio de Elección:** Busca siempre entidades cuyas tasas estén **por debajo de {tasa_promedio_mkt:.2f}% E.A.** (Promedio del Mercado).
+            * **Siguiente Paso:** Ve a la **Pestaña #3 (Calculadora)**, ingresa el monto exacto que necesitas y valida cuánto te ahorras en la cuota mensual eligiendo a **{mejor_banco['nombre_entidad']}**.
+            """)
+
+# =============================================================================
+# PESTAÑA 5: PREDICCIÓN CON MACHINE LEARNING (OPTIMIZADOR AUTOMÁTICO)
+# =============================================================================
+with tab_ml:
+    st.header("🤖 Predicción Predictiva & Recomendador Automático de Tasas")
+    
+    if st.session_state.df_clean is None:
+        st.warning("⚠️ No se ha cargado ninguna data. Ve a la **Pestaña #1** y sube tu archivo CSV para entrenar el modelo de Machine Learning.")
+    else:
+        st.markdown("""
+        Ingresa el monto y el tipo de crédito deseado. El modelo predictivo de **Random Forest** evaluará internamente 
+        todas las entidades financieras disponibles para determinar **cuál banco te ofrece la tasa estimada más baja** y conveniente.
+        """)
+        
+        df_ml = st.session_state.df_clean.copy()
+        
+        req_cols = ['tasa_efectiva_promedio', 'monto_desembolsado', 'tipo_credito']
+        if not all(col in df_ml.columns for col in req_cols):
+            st.warning("El dataset necesita al menos las columnas `tasa_efectiva_promedio`, `monto_desembolsado` y `tipo_credito` para ejecutar la predicción.")
+        else:
+            # Preprocesamiento para ML
+            feature_cols = ['monto_desembolsado', 'tipo_credito']
+            has_banco = 'nombre_entidad' in df_ml.columns
+            if has_banco:
+                feature_cols.append('nombre_entidad')
+                
+            df_model_data = df_ml[feature_cols + ['tasa_efectiva_promedio']].dropna()
+            
+            if len(df_model_data) < 10:
+                st.error("Se requieren al menos 10 registros válidos en el archivo para entrenar el modelo.")
+            else:
+                # One-Hot Encoding de variables categóricas
+                cat_cols = [c for c in ['tipo_credito', 'nombre_entidad'] if c in df_model_data.columns]
+                df_encoded = pd.get_dummies(df_model_data, columns=cat_cols, drop_first=False)
+                
+                X = df_encoded.drop(columns=['tasa_efectiva_promedio'])
+                y = df_encoded['tasa_efectiva_promedio']
+                
+                # Entrenamiento del modelo
+                rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+                rf_model.fit(X, y)
+                
+                st.success("✅ Modelo entrenado exitosamente.")
+                
+                st.markdown("---")
+                st.subheader("🔮 Cotizador & Buscador de la Mejor Entidad")
+                
+                c_ml1, c_ml2, c_ml3 = st.columns(3)
+                
+                with c_ml1:
+                    monto_pred = st.number_input(
+                        "Monto a solicitar ($ COP):", 
+                        min_value=1000000, 
+                        max_value=500000000, 
+                        value=20000000, 
+                        step=1000000,
+                        key="ml_monto_auto"
+                    )
+                    
+                with c_ml2:
+                    tipos_opt = list(df_ml['tipo_credito'].unique())
+                    tipo_pred = st.selectbox("Tipo de Crédito:", tipos_opt, key="ml_tipo_auto")
+                    
+                with c_ml3:
+                    plazo_pred = st.slider(
+                        "Plazo estimado (Meses):", 
+                        min_value=6, 
+                        max_value=120, 
+                        value=24, 
+                        step=6,
+                        key="ml_plazo_auto"
+                    )
+                        
+                if st.button("🚀 Encontrar el Mejor Banco y Predecir Tasa", key="btn_ml_predict"):
+                    list_bancos = df_ml['nombre_entidad'].unique() if has_banco else ['Mercado General']
+                    
+                    resultados_pred = []
+                    
+                    for banco in list_bancos:
+                        # Vector de entrada en cero
+                        input_row = pd.DataFrame(0, index=[0], columns=X.columns)
+                        
+                        if 'monto_desembolsado' in input_row.columns:
+                            input_row['monto_desembolsado'] = monto_pred
+                            
+                        col_tipo = f"tipo_credito_{tipo_pred}"
+                        if col_tipo in input_row.columns:
+                            input_row[col_tipo] = 1
+                            
+                        if has_banco:
+                            col_banco = f"nombre_entidad_{banco}"
+                            if col_banco in input_row.columns:
+                                input_row[col_banco] = 1
+                                
+                        tasa_est = rf_model.predict(input_row)[0]
+                        cuota_est, int_est, total_est = calcular_cuota_fija(monto_pred, tasa_est, plazo_pred)
+                        
+                        resultados_pred.append({
+                            'Entidad': banco,
+                            'Tasa Estimada (E.A.)': tasa_est,
+                            'Cuota Mensual ($)': cuota_est,
+                            'Total Intereses ($)': int_est
+                        })
+                    
+                    # Convertir a DataFrame y ordenar de MENOR a MAYOR tasa
+                    df_preds = pd.DataFrame(resultados_pred).sort_values(by='Tasa Estimada (E.A.)', ascending=True)
+                    mejor_opcion = df_preds.iloc[0]
+                    
+                    st.markdown("---")
+                    st.success(f"### 🏆 Banco Sugerido: **{mejor_opcion['Entidad']}**")
+                    
+                    p1, p2, p3, p4 = st.columns(4)
+                    p1.metric("🥇 Entidad Recomendada", mejor_opcion['Entidad'])
+                    p2.metric("📉 Tasa Estimada (E.A.)", f"{mejor_opcion['Tasa Estimada (E.A.)']:.2f}%")
+                    p3.metric("💳 Cuota Mensual", f"${mejor_opcion['Cuota Mensual ($)']:,.0f}")
+                    p4.metric("💰 Intereses Totales", f"${mejor_opcion['Total Intereses ($)']:,.0f}")
+                    
+                    st.markdown("### 📊 Comparativa de Tasas Estimadas por Entidad")
+                    
+                    # Gráfico ordenado de menor a mayor con azul predeterminado y KEY única
+                    fig_ml_rank = px.bar(
+                        df_preds,
+                        x='Tasa Estimada (E.A.)',
+                        y='Entidad',
+                        orientation='h',
+                        title=f"Ranking Predictivo para Crédito de {tipo_pred} por ${monto_pred:,.0f}",
+                        color='Tasa Estimada (E.A.)',
+                        color_continuous_scale='Blues_r',
+                        template='plotly_white',
+                        text_auto='.2f'
+                    )
+                    fig_ml_rank.update_layout(
+                        yaxis=dict(autorange="reversed"),
+                        font=dict(color="#212529")
+                    )
+                    st.plotly_chart(fig_ml_rank, use_container_width=True, key="chart_ml_rank_auto")
+                    
+                    # Tabla formateada
+                    df_preds_view = df_preds.copy()
+                    df_preds_view['Tasa Estimada (E.A.)'] = df_preds_view['Tasa Estimada (E.A.)'].apply(lambda x: f"{x:.2f}%")
+                    df_preds_view['Cuota Mensual ($)'] = df_preds_view['Cuota Mensual ($)'].apply(lambda x: f"${x:,.0f}")
+                    df_preds_view['Total Intereses ($)'] = df_preds_view['Total Intereses ($)'].apply(lambda x: f"${x:,.0f}")
+                    
+                    st.dataframe(df_preds_view, use_container_width=True)
+
             El dataset debe contener las columnas:
             tasa_efectiva_promedio,
             monto_desembolsado y
