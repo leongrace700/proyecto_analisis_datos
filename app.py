@@ -170,15 +170,317 @@ if 'df_clean' not in st.session_state:
 # -----------------------------------------------------------------------------
 # INTERFAZ Y PESTAÑAS
 # -----------------------------------------------------------------------------
-st.title("🏦 Monitor Financiero & Cotizador de Créditos")
-
-tab_eda, tab_dashboard, tab_simulador, tab_analysis, tab_ml = st.tabs([
+tab_inicio, tab_eda, tab_dashboard, tab_simulador, tab_analysis, tab_ml = st.tabs([
+    "🏠 0. Inicio / Pitch",
     "🔍 1. Cargar & Explorar Datos",
     "📊 2. Dashboard de Tasas", 
     "🧮 3. Calculadora & Comparador", 
     "📈 4. Análisis e Interpretación",
     "🤖 5. Predicción con ML"
 ])
+
+# =============================================================================
+# PESTAÑA 0: PRESENTACIÓN DEL PROYECTO / PITCH
+# =============================================================================
+with tab_inicio:
+
+    # Portada
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #0F52BA 0%, #1976D2 100%);
+        padding: 35px;
+        border-radius: 15px;
+        color: white;
+        margin-bottom: 25px;
+        text-align: center;
+    ">
+        <h1 style="color: white; margin-bottom: 10px;">
+            🏦 Monitor Financiero & Cotizador de Créditos
+        </h1>
+        <p style="font-size: 1.2rem; margin-bottom: 5px;">
+            Plataforma inteligente para comparar, analizar y simular créditos
+        </p>
+        <p style="font-size: 0.95rem;">
+            Análisis de datos aplicado a la toma de decisiones financieras
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Integrantes
+    st.markdown("## 👥 Integrantes del equipo")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.info("### 👤 Grace Leon")
+
+    with col2:
+        st.info("### 👤 Mayerly Roman")
+
+    with col3:
+        st.info("### 👤 Marco Jimenez")
+
+    with col4:
+        st.info("### 👤 Zurley Taborda")
+
+    st.markdown("---")
+
+    # Objetivo
+    st.markdown("## 🎯 Objetivo de la solución")
+
+    st.markdown("""
+    El proyecto tiene como objetivo desarrollar una herramienta interactiva
+    que permita **analizar y comparar las tasas de interés de diferentes
+    entidades financieras**, facilitando la simulación de créditos y
+    ayudando al usuario a identificar alternativas potencialmente más
+    convenientes según el monto y plazo de financiación.
+
+    La solución transforma datos financieros en información clara y útil
+    para apoyar la **toma de decisiones financieras**.
+    """)
+
+    # Problema y usuarios
+    st.markdown("## 💡 Problema que resolvemos")
+
+    problema_col, usuario_col = st.columns(2)
+
+    with problema_col:
+        st.markdown("""
+        ### ❓ ¿Qué problema resuelve?
+
+        Comparar créditos entre diferentes entidades puede resultar
+        complicado debido a:
+
+        - Diferentes tasas de interés.
+        - Diferentes modalidades de crédito.
+        - Diferentes plazos y condiciones.
+        - Dificultad para calcular el costo real del crédito.
+        - Información financiera dispersa.
+
+        Nuestra solución centraliza estos datos y los convierte en
+        **comparaciones, cálculos y recomendaciones fáciles de interpretar**.
+        """)
+
+    with usuario_col:
+        st.markdown("""
+        ### 👥 ¿Quiénes serían los usuarios?
+
+        La solución puede estar dirigida a:
+
+        - Personas que desean solicitar un crédito.
+        - Clientes que quieren comparar diferentes entidades.
+        - Asesores financieros.
+        - Pequeñas y medianas empresas.
+        - Analistas del sector financiero.
+        - Organizaciones que necesitan analizar el comportamiento del mercado crediticio.
+        """)
+
+    st.markdown("---")
+
+    # Diferenciador
+    st.markdown("## 🚀 ¿Qué hace diferente nuestra solución?")
+
+    d1, d2, d3 = st.columns(3)
+
+    with d1:
+        st.markdown("""
+        ### 📊 Datos
+        Utiliza datos financieros estructurados para analizar el
+        comportamiento de las tasas y las entidades.
+        """)
+
+    with d2:
+        st.markdown("""
+        ### 🧮 Simulación
+        Permite estimar cuota mensual, intereses y total a pagar
+        según el monto y plazo seleccionado.
+        """)
+
+    with d3:
+        st.markdown("""
+        ### 🤖 Inteligencia
+        Incorpora Machine Learning para generar estimaciones y
+        apoyar la identificación de alternativas financieras.
+        """)
+
+    # Tecnologías
+    st.markdown("---")
+    st.markdown("## 🛠️ Tecnologías utilizadas")
+
+    tecnologias = [
+        ("🐍", "Python", "Lenguaje principal"),
+        ("🎨", "Streamlit", "Interfaz web interactiva"),
+        ("📊", "Pandas", "Manipulación y análisis de datos"),
+        ("📈", "Plotly", "Visualización de datos"),
+        ("🤖", "Scikit-learn", "Machine Learning"),
+        ("💾", "CSV / Excel", "Fuentes de datos")
+    ]
+
+    tech_cols = st.columns(3)
+
+    for i, (icono, nombre, descripcion) in enumerate(tecnologias):
+        with tech_cols[i % 3]:
+            st.markdown(f"""
+            <div style="
+                background-color: white;
+                padding: 18px;
+                border-radius: 10px;
+                margin-bottom: 15px;
+                border: 1px solid #DEE2E6;
+                min-height: 100px;
+            ">
+                <h3>{icono} {nombre}</h3>
+                <p>{descripcion}</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Funcionalidades
+    st.markdown("---")
+    st.markdown("## ⚙️ Funcionalidades principales")
+
+    funcionalidades = [
+        "📂 Carga y transformación automática de archivos CSV y Excel.",
+        "📊 Dashboard interactivo para analizar tasas y comportamiento del mercado.",
+        "🧮 Calculadora de cuotas para diferentes montos y plazos.",
+        "🏦 Comparación de entidades financieras.",
+        "📉 Identificación de tasas más bajas y alternativas potencialmente más económicas.",
+        "📈 Análisis e interpretación de los principales indicadores.",
+        "🤖 Modelo de Machine Learning basado en Random Forest.",
+        "🔮 Predicción y recomendación automática de entidades."
+    ]
+
+    col_func1, col_func2 = st.columns(2)
+
+    mitad = len(funcionalidades) // 2
+
+    with col_func1:
+        for item in funcionalidades[:mitad]:
+            st.markdown(f"- {item}")
+
+    with col_func2:
+        for item in funcionalidades[mitad:]:
+            st.markdown(f"- {item}")
+
+    # Valor mediante datos e IA
+    st.markdown("---")
+    st.markdown("## 🧠 ¿Cómo aporta valor mediante análisis de datos e IA?")
+
+    st.markdown("""
+    La plataforma convierte información financiera en indicadores y
+    recomendaciones que facilitan la toma de decisiones.
+
+    **El análisis de datos permite:**
+
+    - Identificar diferencias entre las tasas de las entidades.
+    - Encontrar tendencias y patrones en los datos.
+    - Comparar el costo potencial de diferentes alternativas.
+    - Visualizar la información de forma sencilla.
+
+    **El componente de Machine Learning permite:**
+
+    - Analizar la relación entre monto, tipo de crédito y entidad.
+    - Estimar posibles tasas de interés.
+    - Generar una recomendación automática basada en los datos disponibles.
+
+    De esta manera, la solución pasa de ser solamente un dashboard a
+    convertirse en una herramienta de **apoyo para la toma de decisiones**.
+    """)
+
+    # Modelo de negocio
+    st.markdown("---")
+    st.markdown("## 💼 ¿Cómo podría convertirse en un producto real?")
+
+    st.markdown("""
+    La solución podría evolucionar hacia una plataforma web o aplicación
+    financiera donde los usuarios ingresen sus necesidades de financiación
+    y reciban una comparación personalizada.
+
+    ### Modelo de producto
+
+    **1. Usuario**  
+    Ingresa monto, plazo y tipo de crédito.
+
+    **2. Plataforma**  
+    Analiza las tasas y condiciones disponibles.
+
+    **3. Comparador**  
+    Calcula cuotas, intereses y costo total estimado.
+
+    **4. Recomendador**  
+    Identifica las alternativas más convenientes.
+
+    **5. Valor comercial**  
+    La plataforma podría ofrecerse como servicio para consumidores,
+    asesores financieros, empresas o entidades interesadas en análisis
+    del mercado crediticio.
+    """)
+
+    # Flujo de solución
+    st.markdown("---")
+    st.markdown("## 🔄 ¿Cómo funciona nuestra solución?")
+
+    flujo1, flujo2, flujo3, flujo4 = st.columns(4)
+
+    with flujo1:
+        st.markdown("""
+        ### 1️⃣ Datos
+        Carga de información financiera.
+        """)
+
+    with flujo2:
+        st.markdown("""
+        ### 2️⃣ Análisis
+        Limpieza, transformación y análisis.
+        """)
+
+    with flujo3:
+        st.markdown("""
+        ### 3️⃣ Simulación
+        Cálculo y comparación de créditos.
+        """)
+
+    with flujo4:
+        st.markdown("""
+        ### 4️⃣ Decisión
+        Recomendaciones basadas en datos.
+        """)
+
+    # Evidencia visual
+    st.markdown("---")
+    st.markdown("## 🖥️ Evidencia visual de la solución")
+
+    st.info("""
+    📌 **Esta sección puede utilizarse para presentar capturas de pantalla
+    de las diferentes funcionalidades de la aplicación.**
+
+    Se recomienda incluir posteriormente:
+
+    - Captura del Dashboard.
+    - Captura de la Calculadora & Comparador.
+    - Captura del análisis financiero.
+    - Captura del modelo predictivo.
+    """)
+
+    # Cierre del pitch
+    st.markdown("---")
+
+    st.markdown("""
+    <div style="
+        background-color: #E7F1FF;
+        padding: 25px;
+        border-radius: 12px;
+        border-left: 6px solid #0F52BA;
+        margin-top: 20px;
+    ">
+        <h2 style="color: #0F52BA; margin-top: 0;">🎯 Nuestra propuesta de valor</h2>
+        <p style="font-size: 1.05rem;">
+        <b>Monitor Financiero & Cotizador de Créditos</b> transforma datos
+        financieros complejos en información clara, visual y accionable,
+        permitiendo comparar alternativas de crédito y apoyar decisiones
+        financieras mediante análisis de datos y Machine Learning.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # =============================================================================
 # PESTAÑA 1: CARGAR Y EXPLORAR DATOS
